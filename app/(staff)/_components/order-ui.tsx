@@ -75,8 +75,8 @@ export function ErrorBar({ message }: { message: string | null }) {
   );
 }
 
-export function minutesAgo(iso: string | null, now: number): string {
-  if (!iso) return "";
+export function minutesAgo(iso: string | null, now: number | null): string {
+  if (!iso || now === null) return "";
   const minutes = Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000));
   return minutes === 0 ? "just now" : `${minutes} min ago`;
 }

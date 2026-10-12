@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { Database } from "@/lib/supabase/database.types";
-import { createClient } from "@/lib/supabase/client";
+import { getBrowserClient } from "@/lib/supabase/client";
 
 type Enums = Database["public"]["Enums"];
 
@@ -31,7 +31,6 @@ const SAFETY_POLL_MS = 30_000;
 // refetched through RLS, so a missed event heals on the next one (or the
 // safety poll) and staff never see rows they aren't allowed to.
 export function useVenueOrders(venueId: string) {
-  const supabase = useMemo(() => createClient(), []);
   const [orders, setOrders] = useState<StaffOrder[]>([]);
   const [nightId, setNightId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -39,6 +38,7 @@ export function useVenueOrders(venueId: string) {
   const [error, setError] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
+    const supabase = getBrowserClient();
     const { data: night, error: nightError } = await supabase
       .from("venue_nights")
       .select("id")
@@ -70,7 +70,7 @@ export function useVenueOrders(venueId: string) {
     setOrders(rows);
     setError(null);
     setLoaded(true);
-  }, [supabase, venueId]);
+  }, [venueId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +84,7 @@ export function useVenueOrders(venueId: string) {
       }, 250);
     };
 
+    const supabase = getBrowserClient();
     const channel = supabase.channel(`venue:${venueId}`, { config: { private: true } });
     channel.on("broadcast", { event: "order_changed" }, scheduleRefetch);
 
@@ -104,12 +105,12 @@ export function useVenueOrders(venueId: string) {
       clearInterval(poll);
       void supabase.removeChannel(channel);
     };
-  }, [supabase, venueId, refetch]);
+  }, [venueId, refetch]);
 
   // Staff decisions. RLS and the status-transition trigger decide what's allowed.
   const setStatus = useCallback(
     async (orderId: string, status: "approved" | "rejected" | "fulfilled") => {
-      const { error: updateError } = await supabase.from("orders").update({ status }).eq("id", orderId);
+      const { error: updateError } = await getBrowserClient().from("orders").update({ status }).eq("id", orderId);
       if (updateError) {
         setError("That didn't go through. Try again.");
         return false;
@@ -117,18 +118,44 @@ export function useVenueOrders(venueId: string) {
       await refetch();
       return true;
     },
-    [supabase, refetch],
+    [refetch],
   );
 
-  return { supabase, orders, nightId, loaded, live, error, setStatus, refetch };
+  return { orders, nightId, loaded, live, error, setStatus, refetch };
 }
 
-// Re-renders every `intervalMs` so countdowns stay current.
-export function useNow(intervalMs = 15_000): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
-  return now;
+// A shared clock that ticks every 15s, so countdowns stay current.
+// The time is never read during render: it starts when the first component
+// subscribes (after mount), and the server snapshot is null. Reading the clock
+// while Next.js prerenders is an error with Cache Components.
+const CLOCK_TICK_MS = 15_000;
+let clockNow: number | null = null;
+let clockTimer: ReturnType<typeof setInterval> | null = null;
+const clockListeners = new Set<() => void>();
+
+function subscribeClock(onChange: () => void) {
+  clockListeners.add(onChange);
+  if (!clockTimer) {
+    clockNow = Date.now();
+    clockTimer = setInterval(() => {
+      clockNow = Date.now();
+      for (const listener of clockListeners) listener();
+    }, CLOCK_TICK_MS);
+  }
+  return () => {
+    clockListeners.delete(onChange);
+    if (clockListeners.size === 0 && clockTimer) {
+      clearInterval(clockTimer);
+      clockTimer = null;
+    }
+  };
+}
+
+// Milliseconds since epoch, or null until mounted in the browser.
+export function useNow(): number | null {
+  return useSyncExternalStore(
+    subscribeClock,
+    () => clockNow,
+    () => null,
+  );
 }

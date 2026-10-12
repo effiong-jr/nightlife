@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type ScreenSpray, sprayByline, sprayHeadline, spraySubline } from "@/lib/screen/hype";
-import { createPublicClient } from "@/lib/supabase/public";
+import { getPublicBrowserClient } from "@/lib/supabase/public";
 
 // Read from across a room: huge type, few words, bold motion.
 
@@ -14,19 +14,19 @@ const SHOUTOUT_MS = 9000;
 const SNAPSHOT_POLL_MS = 60_000;
 
 export function ClubScreen({ venueId, venueName }: { venueId: string; venueName: string }) {
-  const supabase = useMemo(() => createPublicClient(), []);
   const [snapshot, setSnapshot] = useState<Snapshot>({ open: true, leaderboard: [], shoutouts: [] });
   const [sprays, setSprays] = useState<ScreenSpray[]>([]);
   const [shoutoutIndex, setShoutoutIndex] = useState(0);
   const [live, setLive] = useState(false);
 
   const loadSnapshot = useCallback(() => {
-    void supabase.rpc("screen_snapshot", { p_venue_id: venueId }).then(({ data }) => {
+    void getPublicBrowserClient().rpc("screen_snapshot", { p_venue_id: venueId }).then(({ data }) => {
       if (data) setSnapshot(data as unknown as Snapshot);
     });
-  }, [supabase, venueId]);
+  }, [venueId]);
 
   useEffect(() => {
+    const supabase = getPublicBrowserClient();
     const channel = supabase
       .channel(`screen:${venueId}`)
       .on("broadcast", { event: "spray" }, ({ payload }) => {
@@ -52,7 +52,7 @@ export function ClubScreen({ venueId, venueName }: { venueId: string; venueName:
       clearInterval(poll);
       void supabase.removeChannel(channel);
     };
-  }, [supabase, venueId, loadSnapshot]);
+  }, [venueId, loadSnapshot]);
 
   // One spray at a time, then the next in the queue.
   const current = sprays[0] ?? null;

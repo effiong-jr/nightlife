@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatNaira, nairaToAmount } from "@/lib/money";
 import { type StaffOrder, useNow, useVenueOrders } from "@/lib/realtime/use-venue-orders";
+import { getBrowserClient } from "@/lib/supabase/client";
 import { numeric } from "@/lib/supabase/numeric";
 import { ActionButton, Empty, ErrorBar, LiveBadge, SectionTitle, Who, minutesAgo } from "../_components/order-ui";
 
 // The DJ always has the final say: anything can be rejected (and is refunded).
 export function DjQueue({ venueId, requestTimeoutMinutes }: { venueId: string; requestTimeoutMinutes: number }) {
-  const { supabase, orders, nightId, loaded, live, error, setStatus } = useVenueOrders(venueId);
+  const { orders, nightId, loaded, live, error, setStatus } = useVenueOrders(venueId);
   const now = useNow();
 
   const songs = orders.filter((o) => o.type === "song_request");
@@ -26,7 +27,7 @@ export function DjQueue({ venueId, requestTimeoutMinutes }: { venueId: string; r
         <LiveBadge live={live} />
       </div>
       <ErrorBar message={error} />
-      <RequestControls supabase={supabase} venueId={venueId} />
+      <RequestControls venueId={venueId} />
 
       {loaded && !nightId ? (
         <Empty>No night is open. Requests appear here once the club opens tonight.</Empty>
@@ -113,8 +114,16 @@ function SongCard({ order, children }: { order: StaffOrder; children: React.Reac
 }
 
 // Requests not played within the venue's timeout are refunded automatically.
-function RefundCountdown({ order, timeoutMinutes, now }: { order: StaffOrder; timeoutMinutes: number; now: number }) {
-  if (!order.paid_at) return null;
+function RefundCountdown({
+  order,
+  timeoutMinutes,
+  now,
+}: {
+  order: StaffOrder;
+  timeoutMinutes: number;
+  now: number | null;
+}) {
+  if (!order.paid_at || now === null) return null;
   // Capped: the browser clock may lag the database's paid_at slightly.
   const left = Math.min(
     timeoutMinutes,
@@ -131,20 +140,14 @@ function RefundCountdown({ order, timeoutMinutes, now }: { order: StaffOrder; ti
 type Pricing = { enabled: boolean; min_amount: string };
 
 // Pause requests and set the minimum price. Allowed for the DJ by RLS.
-function RequestControls({
-  supabase,
-  venueId,
-}: {
-  supabase: ReturnType<typeof useVenueOrders>["supabase"];
-  venueId: string;
-}) {
+function RequestControls({ venueId }: { venueId: string }) {
   const [pricing, setPricing] = useState<Pricing | null>(null);
   const [minInput, setMinInput] = useState("");
   const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(
     () =>
-      supabase
+      getBrowserClient()
         .from("venue_pricing")
         .select("enabled, min_amount::text")
         .eq("venue_id", venueId)
@@ -156,7 +159,7 @@ function RequestControls({
             setMinInput(data.min_amount.replace(/\.00$/, ""));
           }
         }),
-    [supabase, venueId],
+    [venueId],
   );
 
   useEffect(() => {
@@ -164,7 +167,7 @@ function RequestControls({
   }, [load]);
 
   async function update(change: { enabled?: boolean; min_amount?: number }, done: string) {
-    const { error } = await supabase
+    const { error } = await getBrowserClient()
       .from("venue_pricing")
       .update(change)
       .eq("venue_id", venueId)
