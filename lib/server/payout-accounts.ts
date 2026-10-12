@@ -38,16 +38,31 @@ export async function syncPayoutAccount({ admin, provider }: Deps, accountId: st
   return true;
 }
 
+// A payout account belongs to a DJ/MC profile or to a venue (club share).
+export type PayeeOwner = { profileId: string } | { venueId: string };
+
+const ownerColumn = (owner: PayeeOwner) =>
+  "profileId" in owner ? (["profile_id", owner.profileId] as const) : (["venue_id", owner.venueId] as const);
+
 export async function getProfilePayoutAccount(
   admin: SupabaseClient<Database>,
   providerName: string,
   profileId: string,
 ): Promise<{ recipientId: string; view: PayoutAccountView } | null> {
+  return getPayoutAccount(admin, providerName, { profileId });
+}
+
+export async function getPayoutAccount(
+  admin: SupabaseClient<Database>,
+  providerName: string,
+  owner: PayeeOwner,
+): Promise<{ recipientId: string; view: PayoutAccountView } | null> {
+  const [column, id] = ownerColumn(owner);
   const { data } = await admin
     .from("payout_accounts")
     .select("recipient_id, status, outstanding, contact_email")
     .eq("provider", providerName)
-    .eq("profile_id", profileId)
+    .eq(column, id)
     .maybeSingle();
   if (!data) return null;
   return {
@@ -59,19 +74,49 @@ export async function getProfilePayoutAccount(
 // Creates the profile's payout account on first use (idempotent per profile)
 // and returns a fresh hosted-onboarding URL to send them to.
 export async function startProfileOnboarding(
-  { admin, provider }: Deps,
+  deps: Deps,
   input: { profileId: string; email: string; displayName: string; appUrl: string },
 ): Promise<string> {
-  let existing = await getProfilePayoutAccount(admin, provider.name, input.profileId);
+  return startPayeeOnboarding(deps, {
+    owner: { profileId: input.profileId },
+    email: input.email,
+    displayName: input.displayName,
+    returnUrl: `${input.appUrl}/payouts?from=bachs`,
+    refreshUrl: `${input.appUrl}/payouts/continue`,
+  });
+}
+
+// Venues are companies; admin runs their onboarding with the club owner.
+export async function startVenueOnboarding(
+  deps: Deps,
+  input: { venueId: string; email: string; venueName: string; appUrl: string },
+): Promise<string> {
+  const page = `${input.appUrl}/admin/venues/${input.venueId}`;
+  return startPayeeOnboarding(deps, {
+    owner: { venueId: input.venueId },
+    email: input.email,
+    displayName: input.venueName,
+    returnUrl: `${page}?from=bachs`,
+    refreshUrl: `${page}?from=bachs`,
+  });
+}
+
+async function startPayeeOnboarding(
+  { admin, provider }: Deps,
+  input: { owner: PayeeOwner; email: string; displayName: string; returnUrl: string; refreshUrl: string },
+): Promise<string> {
+  const isVenue = "venueId" in input.owner;
+  const [, ownerId] = ownerColumn(input.owner);
+  let existing = await getPayoutAccount(admin, provider.name, input.owner);
   if (!existing) {
     const account = await provider.createPayeeAccount({
       email: input.email,
       displayName: input.displayName,
-      entityType: "individual",
-      idempotencyKey: `payee_profile_${input.profileId}`,
+      entityType: isVenue ? "company" : "individual",
+      idempotencyKey: `payee_${isVenue ? "venue" : "profile"}_${ownerId}`,
     });
     const { error } = await admin.from("payout_accounts").insert({
-      profile_id: input.profileId,
+      ...(isVenue ? { venue_id: ownerId } : { profile_id: ownerId }),
       provider: provider.name,
       recipient_id: account.accountId,
       contact_email: input.email,
@@ -82,14 +127,14 @@ export async function startProfileOnboarding(
     });
     // A double submit: someone else inserted first; use theirs.
     if (error && error.code !== "23505") throw error;
-    existing = await getProfilePayoutAccount(admin, provider.name, input.profileId);
+    existing = await getPayoutAccount(admin, provider.name, input.owner);
     if (!existing) throw new Error("Payout account was not saved");
   }
 
   const link = await provider.createOnboardingLink({
     accountId: existing.recipientId,
-    returnUrl: `${input.appUrl}/payouts?from=bachs`,
-    refreshUrl: `${input.appUrl}/payouts/continue`,
+    returnUrl: input.returnUrl,
+    refreshUrl: input.refreshUrl,
   });
   return link.url;
 }

@@ -451,17 +451,23 @@ isOneToOne: true
                   ]
                 },"webhook_events": {
                   Row: {
-                    "error": string | null,"id": string,"payload": NonNullable<Json>,"processed_at": string | null,"provider": string,"provider_event_id": string,"received_at": string,"type": string
+                    "error": string | null,"id": string,"payload": NonNullable<Json>,"processed_at": string | null,"provider": string,"provider_event_id": string,"received_at": string,"resolution_note": string | null,"resolved_at": string | null,"resolved_by": string | null,"type": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "error"?: string | null,"id"?: string,"payload": NonNullable<Json>,"processed_at"?: string | null,"provider": string,"provider_event_id": string,"received_at"?: string,"type": string
+                    "error"?: string | null,"id"?: string,"payload": NonNullable<Json>,"processed_at"?: string | null,"provider": string,"provider_event_id": string,"received_at"?: string,"resolution_note"?: string | null,"resolved_at"?: string | null,"resolved_by"?: string | null,"type": string
                   }
                   Update: {
-                    "error"?: string | null,"id"?: string,"payload"?: NonNullable<Json>,"processed_at"?: string | null,"provider"?: string,"provider_event_id"?: string,"received_at"?: string,"type"?: string
+                    "error"?: string | null,"id"?: string,"payload"?: NonNullable<Json>,"processed_at"?: string | null,"provider"?: string,"provider_event_id"?: string,"received_at"?: string,"resolution_note"?: string | null,"resolved_at"?: string | null,"resolved_by"?: string | null,"type"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "webhook_events_resolved_by_fkey"
+      columns: ["resolved_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
                   ]
                 }
           }
@@ -505,11 +511,17 @@ isOneToOne: true
               "amount": number,"party": Database["public"]['Enums']["ledger_party"]
             }[]
                            },
+"create_venue":
+{ Args: { "p_address": string,"p_name": string,"p_slug": string }; Returns: string
+                           },
 "end_set":
 { Args: { "p_set_id": string }; Returns: undefined
                            },
 "expire_stale_orders":
 { Args: Record<PropertyKey, never>; Returns: number
+                           },
+"find_user_by_phone":
+{ Args: { "p_phone": string }; Returns: string
                            },
 "has_venue_role":
 { Args: { "p_roles": (Database["public"]['Enums']["staff_role"])[],"p_venue_id": string }; Returns: boolean
@@ -591,6 +603,12 @@ isOneToOne: true
                            },
 "request_refund":
 { Args: { "p_order_id": string,"p_reason": string }; Returns: string
+                           },
+"retry_payout":
+{ Args: { "p_payout_id": string }; Returns: undefined
+                           },
+"retry_refund":
+{ Args: { "p_order_id": string }; Returns: string
                            },
 "screen_display_name":
 { Args: { "p_order": Omit<Database["public"]['Tables']["orders"]['Row'], Database["public"]['Tables']["orders"]['ComputedFields']> }; Returns: string
