@@ -183,14 +183,14 @@ isOneToOne: false
                   ]
                 },"payout_accounts": {
                   Row: {
-                    "created_at": string,"id": string,"profile_id": string | null,"provider": string,"recipient_id": string,"status": Database["public"]['Enums']["payout_account_status"],"updated_at": string,"venue_id": string | null
+                    "contact_email": string | null,"created_at": string,"id": string,"outstanding": (string)[],"payouts_active": boolean,"profile_id": string | null,"provider": string,"recipient_id": string,"status": Database["public"]['Enums']["payout_account_status"],"synced_at": string | null,"transfers_active": boolean,"updated_at": string,"venue_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"profile_id"?: string | null,"provider": string,"recipient_id": string,"status"?: Database["public"]['Enums']["payout_account_status"],"updated_at"?: string,"venue_id"?: string | null
+                    "contact_email"?: string | null,"created_at"?: string,"id"?: string,"outstanding"?: (string)[],"payouts_active"?: boolean,"profile_id"?: string | null,"provider": string,"recipient_id": string,"status"?: Database["public"]['Enums']["payout_account_status"],"synced_at"?: string | null,"transfers_active"?: boolean,"updated_at"?: string,"venue_id"?: string | null
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"profile_id"?: string | null,"provider"?: string,"recipient_id"?: string,"status"?: Database["public"]['Enums']["payout_account_status"],"updated_at"?: string,"venue_id"?: string | null
+                    "contact_email"?: string | null,"created_at"?: string,"id"?: string,"outstanding"?: (string)[],"payouts_active"?: boolean,"profile_id"?: string | null,"provider"?: string,"recipient_id"?: string,"status"?: Database["public"]['Enums']["payout_account_status"],"synced_at"?: string | null,"transfers_active"?: boolean,"updated_at"?: string,"venue_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -531,6 +531,9 @@ isOneToOne: true
                            },
 "record_paid_order":
 { Args: { "p_amount": number,"p_checkout_id": string,"p_collection_id": string,"p_currency": string,"p_event_id": string,"p_event_type": string,"p_order_id": string,"p_payload": Json,"p_provider": string }; Returns: string
+                           },
+"record_payout_account_state":
+{ Args: { "p_outstanding": (string)[],"p_payouts_active": boolean,"p_provider": string,"p_recipient_id": string,"p_transfers_active": boolean }; Returns: undefined
                            },
 "record_refund_status":
 { Args: { "p_error": string,"p_provider_refund_id": string,"p_refund_id": string,"p_status": Database["public"]['Enums']["refund_status"] }; Returns: undefined

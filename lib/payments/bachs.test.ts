@@ -329,3 +329,73 @@ describe("refunds", () => {
     expect(parse(event("refund.failed", "failed"))).toMatchObject({ status: "failed" });
   });
 });
+
+describe("payee accounts (Connect)", () => {
+  // Shape returned by the real sandbox (2026-10-12): capabilities active at
+  // once, but name and bank account still due.
+  const sandboxAccount = {
+    id: "acct_EH2MXTOkrNaUvezJ",
+    capabilities: {
+      payouts: { status: "active", requested: true, status_details: null },
+      transfers: { status: "active", requested: true, status_details: null },
+      conversions: { status: "active", requested: true, status_details: null },
+    },
+    requirements: { currently_due: ["persons.name", "payout_destination"], past_due: [], eventually_due: [] },
+  };
+
+  it("creates a recipient-only individual account in Nigeria", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(sandboxAccount, { status: 201 }));
+    const provider = createBachsProvider({ secretKey: "sk_sandbox_key", fetch: fetchMock });
+    await expect(
+      provider.createPayeeAccount({ email: "dj@example.com", displayName: "DJ Test", entityType: "individual", idempotencyKey: "payee_profile_1" }),
+    ).resolves.toEqual({
+      accountId: "acct_EH2MXTOkrNaUvezJ",
+      transfersActive: true,
+      payoutsActive: true,
+      outstanding: ["persons.name", "payout_destination"],
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://sandbox-api.bachs.io/v1/accounts");
+    expect(init?.headers).toMatchObject({ "Idempotency-Key": "payee_profile_1" });
+    expect(JSON.parse(init?.body as string)).toEqual({
+      contact_email: "dj@example.com",
+      display_name: "DJ Test",
+      country: "NG",
+      entity_type: "individual",
+      configuration: { recipient: { capabilities: { transfers: { requested: true }, payouts: { requested: true } } } },
+    });
+  });
+
+  it("reads an account with GET and treats anything but active as off", async () => {
+    const restricted = { ...sandboxAccount, capabilities: { ...sandboxAccount.capabilities, payouts: { status: "restricted" } } };
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(restricted));
+    const provider = createBachsProvider({ secretKey: "sk_sandbox_key", fetch: fetchMock });
+    await expect(provider.getPayeeAccount("acct_1")).resolves.toMatchObject({ transfersActive: true, payoutsActive: false });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://sandbox-api.bachs.io/v1/accounts/acct_1");
+    expect(init?.method).toBe("GET");
+    expect(init?.body).toBeUndefined();
+  });
+
+  it("creates a hosted onboarding link", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => Response.json({ url: "https://sandbox-connect.bachs.io/x", expires_at: "2026-11-11T00:00:00Z" }));
+    const provider = createBachsProvider({ secretKey: "sk_sandbox_key", fetch: fetchMock });
+    await expect(
+      provider.createOnboardingLink({ accountId: "acct_1", returnUrl: "https://app/payouts?from=bachs", refreshUrl: "https://app/payouts/continue" }),
+    ).resolves.toEqual({ url: "https://sandbox-connect.bachs.io/x", expiresAt: "2026-11-11T00:00:00Z" });
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+      type: "onboarding",
+      return_url: "https://app/payouts?from=bachs",
+      refresh_url: "https://app/payouts/continue",
+    });
+  });
+
+  it("turns account.updated and capability.updated into 'payee account changed'", () => {
+    for (const type of ["account.updated", "capability.updated"]) {
+      const body = JSON.stringify({ id: "evt_c", type, organization_id: "acct_9", account: "acct_9", data: { account: "acct_9", capability: "payouts", status: "active" } });
+      expect(parse(body)).toMatchObject({ kind: "payee_account_changed", accountId: "acct_9" });
+    }
+  });
+});

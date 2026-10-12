@@ -34,6 +34,25 @@ export type RefundStatus = "processing" | "succeeded" | "failed";
 
 export type Refund = { providerRefundId: string; status: RefundStatus };
 
+// A person or venue we pay out to (Bachs: a Connect "recipient" account).
+// Verification happens on the provider's hosted onboarding page.
+export type PayeeAccount = {
+  accountId: string;
+  transfersActive: boolean;
+  payoutsActive: boolean;
+  // Requirement keys still wanted, e.g. "persons.per_1.id_document".
+  outstanding: string[];
+};
+
+export type CreatePayeeAccountInput = {
+  email: string;
+  displayName: string;
+  entityType: "individual" | "company";
+  idempotencyKey: string;
+};
+
+export type OnboardingLink = { url: string; expiresAt: string };
+
 // A verified webhook, normalised to what the app acts on.
 export type PaymentEvent =
   | {
@@ -77,6 +96,14 @@ export type PaymentEvent =
       status: RefundStatus;
       payload: unknown;
     }
+  | {
+      // A payee account's verification or capabilities changed: re-read it.
+      kind: "payee_account_changed";
+      eventId: string;
+      type: string;
+      accountId: string;
+      payload: unknown;
+    }
   | { kind: "ignored"; eventId: string; type: string; payload: unknown };
 
 export interface PaymentProvider {
@@ -85,6 +112,10 @@ export interface PaymentProvider {
   // Full refund of a collected payment. Asynchronous: the outcome arrives as a
   // refund_updated webhook. Throws PaymentProviderError.
   createRefund(input: CreateRefundInput): Promise<Refund>;
+  createPayeeAccount(input: CreatePayeeAccountInput): Promise<PayeeAccount>;
+  getPayeeAccount(accountId: string): Promise<PayeeAccount>;
+  // Single-use, short-lived URL for the provider's hosted verification flow.
+  createOnboardingLink(input: { accountId: string; returnUrl: string; refreshUrl: string }): Promise<OnboardingLink>;
   // Verifies the signature and parses the event. Throws WebhookSignatureError,
   // or WebhookNotConfiguredError when there's no secret to verify with.
   parseWebhook(rawBody: string, headers: Headers): PaymentEvent;

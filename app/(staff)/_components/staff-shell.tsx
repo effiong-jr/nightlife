@@ -15,11 +15,12 @@ export function StaffShell({
   children,
 }: {
   ctx: StaffContext;
-  current: "/dj" | "/mc" | "/club";
+  current: "/dj" | "/mc" | "/club" | "/payouts";
   children: React.ReactNode;
 }) {
   const isManager = ctx.venue.roles.includes("club_manager");
   const views = VIEWS.filter((v) => isManager || ctx.venue.roles.includes(v.role));
+  const isPayee = ctx.venue.roles.includes("dj") || ctx.venue.roles.includes("mc");
   const venueQuery = ctx.venues.length > 1 ? `?venue=${ctx.venue.slug}` : "";
 
   return (
@@ -29,9 +30,9 @@ export function StaffShell({
           <p className="truncate font-semibold">{ctx.venue.name}</p>
           <p className="truncate text-xs text-muted-foreground">{ctx.displayName || "Staff"}</p>
         </div>
-        {views.length > 1 && (
+        {(views.length > 1 || isPayee) && (
           <nav className="flex gap-1">
-            {views.map((v) => (
+            {(views.length > 1 ? views : []).map((v) => (
               <Link
                 key={v.href}
                 href={`${v.href}${venueQuery}`}
@@ -41,6 +42,15 @@ export function StaffShell({
                 {v.label}
               </Link>
             ))}
+            {isPayee && (
+              <Link
+                href="/payouts"
+                aria-current={current === "/payouts" ? "page" : undefined}
+                className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground aria-[current=page]:bg-muted aria-[current=page]:text-foreground"
+              >
+                Get paid
+              </Link>
+            )}
           </nav>
         )}
         <form action={signOut}>

@@ -6,7 +6,10 @@ import { amountSchema, currencySchema } from "@/lib/money-schema";
 import {
   type Checkout,
   type CreateCheckoutInput,
+  type CreatePayeeAccountInput,
   type CreateRefundInput,
+  type OnboardingLink,
+  type PayeeAccount,
   type Refund,
   type RefundStatus,
   type PaymentEvent,
@@ -55,6 +58,53 @@ function refundStatus(status: string): RefundStatus {
   return "processing";
 }
 
+// GET/POST /v1/accounts. Capabilities may come as a map or a list; requirement
+// buckets as arrays of field keys.
+const accountSchema = z.object({
+  id: z.string().min(1),
+  capabilities: z.unknown().optional(),
+  requirements: z
+    .object({
+      currently_due: z.array(z.string()).optional(),
+      past_due: z.array(z.string()).optional(),
+    })
+    .partial()
+    .nullish(),
+});
+
+const accountLinkSchema = z.object({ url: z.url(), expires_at: z.string() });
+
+function capabilityStatus(capabilities: unknown, name: string): string | null {
+  if (Array.isArray(capabilities)) {
+    const entry = capabilities.find(
+      (c) => c && typeof c === "object" && ((c as Record<string, unknown>).name === name || (c as Record<string, unknown>).capability === name),
+    ) as Record<string, unknown> | undefined;
+    return typeof entry?.status === "string" ? entry.status : null;
+  }
+  if (capabilities && typeof capabilities === "object") {
+    const entry = (capabilities as Record<string, unknown>)[name];
+    if (entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).status === "string") {
+      return (entry as Record<string, unknown>).status as string;
+    }
+  }
+  return null;
+}
+
+function toPayeeAccount(json: unknown): PayeeAccount {
+  const parsed = accountSchema.safeParse(json);
+  if (!parsed.success) throw new PaymentProviderError("Unexpected Bachs account response", null, null);
+  const { id, capabilities, requirements } = parsed.data;
+  return {
+    accountId: id,
+    // Only "active" means enabled; anything else (restricted, pending...) doesn't.
+    transfersActive: capabilityStatus(capabilities, "transfers") === "active",
+    payoutsActive: capabilityStatus(capabilities, "payouts") === "active",
+    outstanding: [...new Set([...(requirements?.past_due ?? []), ...(requirements?.currently_due ?? [])])],
+  };
+}
+
+const connectEventSchema = z.object({ account: z.string().min(1) });
+
 const envelopeSchema = z.object({
   id: z.string().min(1),
   type: z.string().min(1),
@@ -87,17 +137,20 @@ export function createBachsProvider(config: BachsConfig): PaymentProvider {
   const doFetch = config.fetch ?? fetch;
   const now = config.now ?? Date.now;
 
-  async function post(path: string, body: unknown, idempotencyKey: string): Promise<unknown> {
+  const post = (path: string, body: unknown, idempotencyKey: string) => call("POST", path, body, idempotencyKey);
+  const get = (path: string) => call("GET", path);
+
+  async function call(method: "GET" | "POST", path: string, body?: unknown, idempotencyKey?: string): Promise<unknown> {
     const request = () =>
       doFetch(`${baseUrl}${path}`, {
-        method: "POST",
+        method,
         headers: {
           Authorization: `Bearer ${config.secretKey}`,
-          "Content-Type": "application/json",
           Accept: "application/json",
-          "Idempotency-Key": idempotencyKey,
+          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+          ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
         },
-        body: JSON.stringify(body),
+        body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
 
@@ -170,6 +223,41 @@ export function createBachsProvider(config: BachsConfig): PaymentProvider {
         throw new PaymentProviderError("Unexpected Bachs refund response", null, null);
       }
       return { providerRefundId: parsed.data.refund_id, status: refundStatus(parsed.data.status) };
+    },
+
+    async createPayeeAccount(input: CreatePayeeAccountInput): Promise<PayeeAccount> {
+      const json = await post(
+        "/v1/accounts",
+        {
+          contact_email: input.email,
+          display_name: input.displayName,
+          country: "NG",
+          entity_type: input.entityType,
+          // Recipient persona: receives transfers and pays out to a bank; never
+          // takes payments itself.
+          configuration: {
+            recipient: { capabilities: { transfers: { requested: true }, payouts: { requested: true } } },
+          },
+        },
+        input.idempotencyKey,
+      );
+      return toPayeeAccount(json);
+    },
+
+    async getPayeeAccount(accountId: string): Promise<PayeeAccount> {
+      return toPayeeAccount(await get(`/v1/accounts/${encodeURIComponent(accountId)}`));
+    },
+
+    async createOnboardingLink(input): Promise<OnboardingLink> {
+      const json = await post(
+        `/v1/accounts/${encodeURIComponent(input.accountId)}/account-links`,
+        { type: "onboarding", return_url: input.returnUrl, refresh_url: input.refreshUrl },
+        // A new link supersedes the old one; each request is its own operation.
+        `account_link_${input.accountId}_${Date.now()}`,
+      );
+      const parsed = accountLinkSchema.safeParse(json);
+      if (!parsed.success) throw new PaymentProviderError("Unexpected Bachs account link response", null, null);
+      return { url: parsed.data.url, expiresAt: parsed.data.expires_at };
     },
 
     parseWebhook(rawBody: string, headers: Headers): PaymentEvent {
@@ -303,6 +391,12 @@ function toPaymentEvent(envelope: z.infer<typeof envelopeSchema>, payload: unkno
       orderId: orderIdFrom(data.data),
       checkoutId: data.data.checkout_id ?? null,
     };
+  }
+
+  if (envelope.type === "account.updated" || envelope.type === "capability.updated") {
+    const data = connectEventSchema.safeParse(envelope.data);
+    if (!data.success) throw new WebhookSignatureError(`Malformed ${envelope.type} data`);
+    return { kind: "payee_account_changed", ...base, accountId: data.data.account };
   }
 
   if (envelope.type === "refund.created" || envelope.type === "refund.paid" || envelope.type === "refund.failed") {

@@ -86,6 +86,10 @@ DJs and MCs become staff at a venue in one of two ways; both end with an `active
 4. **Money is a decimal string + ISO currency** (e.g. `"2000.00"`, `"NGN"`), matching the Bachs API. Never floats. In Postgres use `numeric(14,2)`. Never minor units in API calls to Bachs.
 5. **Never hold customer balances / no wallets.** Every payment flows through Bachs; we only record shares.
 6. **Settle after closing, not per payment.** A nightly job transfers each party's share to their Bachs connected (recipient) account in one transfer per party per night. Refunds are taken from the ledger before settlement.
+   - Paying third parties requires **Bachs Connect** (payouts only go to your *own* bank otherwise). Each DJ/MC (and venue) has a Connect "recipient" account (`transfers` + `payouts` capabilities). Money moves in two hops: transfer from our available (settled) balance → their account, then payout → their bank. **Live Connect needs our Bachs account upgraded to a registered business with `connect` active.**
+   - DJs/MCs verify on **Bachs's hosted onboarding page** (`/payouts` → "Get paid"); we never collect or store ID documents, NINs, BVNs or bank details, only the account ID and its state.
+   - A payout account is **payable** only when `transfers` and `payouts` are `active` **and** nothing is outstanding (Bachs marks capabilities active before the bank account is added).
+   - **Bachs's payout fee comes out of each payee's payout** (₦25,000 owed → ₦24,900 arrives), shown on their earnings.
 7. **Every external payment call uses an `Idempotency-Key`** and stores the returned IDs.
 8. **All Bachs calls go through `lib/payments/`** (a small provider interface) so we can switch to Paystack/Flutterwave later. No Bachs API calls or Bachs-specific types outside that folder.
 9. **Secrets live in `.env.local`** and server code only. Never expose secret keys to the browser. Build against the Bachs sandbox (`sk_sandbox_` keys) until told otherwise.
@@ -108,7 +112,7 @@ DJs and MCs become staff at a venue in one of two ways; both end with an `active
 - `venue_splits` — private, per order type: club/dj/mc/platform basis points (sum 10000)
 - `venue_target_splits` — private, per venue: target/club/platform basis points for targeted sprays (default 5000/4000/1000)
 - `profiles` — id (auth user), real_name (private), display_name (the stage name, public), role(s); phone lives on the auth user (verified by OTP)
-- `payout_accounts` — owner is a venue (club share; set by admin) or a profile (DJ/MC); provider, recipient_id, status. Provider-neutral.
+- `payout_accounts` — owner is a venue (club share; set by admin) or a profile (DJ/MC); provider, recipient_id (Bachs `acct_`), contact_email, transfers_active, payouts_active, outstanding (requirement keys), status (`pending` | `active` = payable | `restricted`). Provider-neutral; synced from `account.updated` / `capability.updated` webhooks (Connect event source).
 - `venue_staff` — venue_id, profile_id, role (`club_manager` | `dj` | `mc`), source (`invite` | `request` | `admin`), status (`active` | `removed` | `left`), joined_at, ended_at
 - `invites` — venue_id, role, token_hash (unique; SHA-256 of the token, which only exists in the link), invitee_name, created_by, expires_at (7 days), cancelled_at, accepted_by, accepted_at
 - `staff_requests` — venue_id, profile_id, role, note, status (`pending` | `approved` | `declined` | `withdrawn`), decided_by, decided_at; unique pending per (venue_id, profile_id)

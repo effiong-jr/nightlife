@@ -9,7 +9,10 @@ import type { PaymentProvider } from "./types";
 export type {
   Checkout,
   CreateCheckoutInput,
+  CreatePayeeAccountInput,
   CreateRefundInput,
+  OnboardingLink,
+  PayeeAccount,
   PaymentEvent,
   PaymentProvider,
   Refund,

@@ -8,6 +8,7 @@ import {
 } from "@/lib/payments";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { numeric } from "@/lib/supabase/numeric";
+import { syncPayoutAccount } from "./payout-accounts";
 
 type Deps = {
   provider: PaymentProvider;
@@ -59,6 +60,12 @@ export async function handlePaymentWebhook(
       return expireCheckout(event, deps);
     case "refund_updated":
       return applyRefundUpdate(event, deps);
+    case "payee_account_changed": {
+      // Re-read the account rather than trusting event order (capabilities can
+      // flip restricted <-> active more than once).
+      const found = await syncPayoutAccount(deps, event.accountId);
+      return ok(found ? "payee_synced" : "payee_unknown");
+    }
     case "ignored":
       return ok("ignored");
   }

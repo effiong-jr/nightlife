@@ -114,7 +114,7 @@ async function Join({ params }: Pick<PageProps<"/join/[token]">, "params">) {
         </div>
         <div className="flex justify-between gap-4 px-4 py-3">
           <dt className="text-muted-foreground">Payouts</dt>
-          <dd className="text-right text-muted-foreground">Add your bank account before your first payout (coming soon)</dd>
+          <dd className="text-right text-muted-foreground">Set up after joining, under “Get paid”</dd>
         </div>
       </dl>
       <AcceptForm token={token} />
