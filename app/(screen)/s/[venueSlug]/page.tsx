@@ -1,8 +1,21 @@
-export default function ScreenPage() {
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { getPublicVenue } from "@/lib/server/venues";
+import { ClubScreen } from "./club-screen";
+
+// Big screen on a TV/laptop in the club. Public: it only ever shows what's
+// already on the screen (paid sprays, approved shoutouts, nickname leaderboard).
+export default function ScreenPage({ params }: PageProps<"/s/[venueSlug]">) {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
-      <h1 className="text-2xl font-semibold">Club screen</h1>
-      <p className="text-muted-foreground">Big-screen view (step 5).</p>
-    </main>
+    <Suspense fallback={<div className="h-dvh bg-black" />}>
+      <Screen params={params} />
+    </Suspense>
   );
+}
+
+async function Screen({ params }: Pick<PageProps<"/s/[venueSlug]">, "params">) {
+  const { venueSlug } = await params;
+  const venue = await getPublicVenue(venueSlug);
+  if (!venue) notFound();
+  return <ClubScreen venueId={venue.id} venueName={venue.name} />;
 }

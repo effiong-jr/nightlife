@@ -128,3 +128,43 @@
     @apply font-sans;
   }
 }
+/* Club screen motion (app/(screen)). Stylised notes, not naira replicas. */
+@keyframes money-fall {
+  from {
+    transform: translateY(-20vh) rotate(var(--spin-from, 0deg));
+  }
+  to {
+    transform: translateY(120vh) rotate(var(--spin-to, 180deg));
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    transform: translateY(2vh);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-money {
+    display: none;
+  }
+}

@@ -7,6 +7,7 @@ export type OrderType = Database["public"]["Enums"]["order_type"];
 export type VenueOption = { type: OrderType; enabled: boolean; minAmount: string };
 
 export type PublicVenue = {
+  id: string;
   slug: string;
   name: string;
   currency: string;
@@ -52,6 +53,7 @@ export async function getPublicVenue(slug: string): Promise<PublicVenue | null> 
   });
 
   return {
+    id: venue.id,
     slug: venue.slug,
     name: venue.name,
     currency: venue.currency,

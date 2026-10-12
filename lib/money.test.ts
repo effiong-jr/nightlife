@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { amountsEqual, formatNaira, fromMinorUnits, isAmount, nairaToAmount, toMinorUnits } from "./money";
+import {
+  amountsEqual,
+  formatNaira,
+  formatNairaShort,
+  fromMinorUnits,
+  isAmount,
+  nairaToAmount,
+  toMinorUnits,
+} from "./money";
 
 describe("money", () => {
   it("accepts only 2-decimal strings that fit numeric(14,2)", () => {
@@ -22,6 +30,16 @@ describe("money", () => {
     expect(nairaToAmount("5000")).toBe("5000.00");
     expect(nairaToAmount(" 250 ")).toBe("250.00");
     for (const bad of ["", "0", "05", "5.5", "-5", "5,000", "1e4"]) expect(nairaToAmount(bad)).toBeNull();
+  });
+
+  it("formats compact screen amounts, rounding down", () => {
+    expect(formatNairaShort("999.99")).toBe("₦999");
+    expect(formatNairaShort("1000.00")).toBe("₦1k");
+    expect(formatNairaShort("1500.00")).toBe("₦1.5k");
+    expect(formatNairaShort("1999.00")).toBe("₦1.9k");
+    expect(formatNairaShort("50000.00")).toBe("₦50k");
+    expect(formatNairaShort("125500.00")).toBe("₦125k");
+    expect(formatNairaShort("2500000.00")).toBe("₦2.5m");
   });
 
   it("formats naira with thousands separators", () => {

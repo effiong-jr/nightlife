@@ -1,8 +1,25 @@
-export default function McPage() {
+import { Suspense } from "react";
+import { getStaffContext } from "@/lib/server/staff";
+import { NoAccess, StaffLoading, StaffShell } from "../_components/staff-shell";
+import { McView } from "./mc-view";
+
+// Hype man's phone view: shoutouts to read on the mic and big-spray alerts.
+export default function McPage({ searchParams }: PageProps<"/mc">) {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
-      <h1 className="text-2xl font-semibold">MC view</h1>
-      <p className="text-muted-foreground">Hype man view (step 5).</p>
-    </main>
+    <Suspense fallback={<StaffLoading />}>
+      <Mc searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function Mc({ searchParams }: Pick<PageProps<"/mc">, "searchParams">) {
+  const { venue } = await searchParams;
+  const ctx = await getStaffContext("/mc", ["mc"], typeof venue === "string" ? venue : undefined);
+  if (!ctx) return <NoAccess role="a hype man" />;
+
+  return (
+    <StaffShell ctx={ctx} current="/mc">
+      <McView venueId={ctx.venue.id} />
+    </StaffShell>
   );
 }

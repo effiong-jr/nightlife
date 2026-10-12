@@ -101,9 +101,9 @@ isOneToOne: false
                   ]
                 },"orders": {
                   Row: {
-                    "amount": number,"created_at": string,"currency": string,"decided_at": string | null,"decided_by": string | null,"id": string,"message": string | null,"nickname": string,"paid_at": string | null,"show_on_leaderboard": boolean,"song_artist": string | null,"song_title": string | null,"spray_target": Database["public"]['Enums']["spray_target"] | null,"status": Database["public"]['Enums']["order_status"],"table_label": string | null,"type": Database["public"]['Enums']["order_type"],"venue_id": string,"venue_night_id": string
+                    "amount": number,"created_at": string,"currency": string,"decided_at": string | null,"decided_by": string | null,"id": string,"message": string | null,"nickname": string,"paid_at": string | null,"show_on_leaderboard": boolean,"song_artist": string | null,"song_title": string | null,"spray_target": Database["public"]['Enums']["spray_target"] | null,"status": Database["public"]['Enums']["order_status"],"table_label": string | null,"type": Database["public"]['Enums']["order_type"],"venue_id": string,"venue_night_id": string,"screen_display_name": string | null
                   }
-                  ComputedFields: never
+                  ComputedFields: "screen_display_name"
                   Insert: {
                     "amount": number,"created_at"?: string,"currency"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"id"?: string,"message"?: string | null,"nickname": string,"paid_at"?: string | null,"show_on_leaderboard"?: boolean,"song_artist"?: string | null,"song_title"?: string | null,"spray_target"?: Database["public"]['Enums']["spray_target"] | null,"status"?: Database["public"]['Enums']["order_status"],"table_label"?: string | null,"type": Database["public"]['Enums']["order_type"],"venue_id": string,"venue_night_id": string
                   }
@@ -396,6 +396,9 @@ isOneToOne: false
             "can_decide_order":
 { Args: { "p_type": Database["public"]['Enums']["order_type"],"p_venue_id": string }; Returns: boolean
                            },
+"can_join_venue_topic":
+{ Args: { "p_topic": string }; Returns: boolean
+                           },
 "can_place_order":
 { Args: { "p_amount": number,"p_currency": string,"p_night_id": string,"p_type": Database["public"]['Enums']["order_type"],"p_venue_id": string }; Returns: boolean
                            },
@@ -418,6 +421,12 @@ isOneToOne: false
                            },
 "record_webhook_failure":
 { Args: { "p_error": string,"p_event_id": string,"p_event_type": string,"p_payload": Json,"p_provider": string }; Returns: undefined
+                           },
+"screen_display_name":
+{ Args: { "p_order": Omit<Database["public"]['Tables']["orders"]['Row'], Database["public"]['Tables']["orders"]['ComputedFields']> }; Returns: string
+                           },
+"screen_snapshot":
+{ Args: { "p_venue_id": string }; Returns: Json
                            },
 "shares_venue_with":
 { Args: { "p_profile_id": string }; Returns: boolean

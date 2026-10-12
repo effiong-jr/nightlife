@@ -32,6 +32,21 @@ export function nairaToAmount(naira: string): string | null {
   return /^[1-9]\d{0,11}$/.test(trimmed) ? `${trimmed}.00` : null;
 }
 
+// Compact form for the club screen: "₦999", "₦1.5k", "₦50k", "₦2.5m".
+// Rounds down so the screen never overstates a spray.
+export function formatNairaShort(amount: string): string {
+  const naira = toMinorUnits(amount) / 100n;
+  const compact = (value: bigint, unit: bigint, suffix: string) => {
+    const tenths = (value * 10n) / unit;
+    const whole = tenths / 10n;
+    const fraction = tenths % 10n;
+    return `₦${whole}${fraction && whole < 100n ? `.${fraction}` : ""}${suffix}`;
+  };
+  if (naira >= 1_000_000n) return compact(naira, 1_000_000n, "m");
+  if (naira >= 1_000n) return compact(naira, 1_000n, "k");
+  return `₦${naira}`;
+}
+
 // "₦2,000" / "₦2,000.50". Formats from the string, never via a float.
 export function formatNaira(amount: string): string {
   const [whole, kobo] = fromMinorUnits(toMinorUnits(amount)).split(".");
