@@ -432,3 +432,38 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
+
+# --- Staging (test environment): hosted project pccxzessxwiltmseukwr --------
+# Overrides applied by `supabase config push` to the linked staging project.
+# Everything else (phone sign-in, test OTP numbers, SMS template) is inherited
+# from the local settings above. The hook secret comes from
+# STAGING_SEND_SMS_HOOK_SECRET (kept in .env.staging.local, never committed).
+[remotes.staging]
+project_id = "pccxzessxwiltmseukwr"
+
+[remotes.staging.auth]
+site_url = "https://nightlife-sand.vercel.app"
+additional_redirect_urls = ["https://nightlife-sand.vercel.app/**"]
+
+# Keep the hosted project's own values for settings we don't manage.
+[remotes.staging.auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+
+[remotes.staging.auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[remotes.staging.db.pooler]
+default_pool_size = 15
+max_client_conn = 200
+
+[remotes.staging.storage.analytics]
+enabled = true
+max_namespaces = 10
+
+[remotes.staging.auth.hook.send_sms]
+enabled = true
+uri = "https://nightlife-sand.vercel.app/api/auth/send-sms"
+secrets = "env(STAGING_SEND_SMS_HOOK_SECRET)"
