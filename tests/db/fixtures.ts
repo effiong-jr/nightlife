@@ -53,15 +53,33 @@ export async function addStaff(db: Db, venueId: string, profileId: string, role:
   );
 }
 
+// Opens tonight. A DJ/MC given here goes on an open-ended set that started an
+// hour ago (now() is fixed for the whole test transaction, so a set starting
+// "now" couldn't be handed over within the same test).
 export async function openNight(
   db: Db,
   venueId: string,
   opts: { djId?: string | null; mcId?: string | null } = {},
 ): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
-    `insert into public.venue_nights (venue_id, night_date, dj_profile_id, mc_profile_id, opened_at)
-     values ($1, current_date, $2, $3, now()) returning id`,
-    [venueId, opts.djId ?? null, opts.mcId ?? null],
+    `insert into public.venue_nights (venue_id, night_date, opened_at)
+     values ($1, current_date, now()) returning id`,
+    [venueId],
+  );
+  const nightId = rows[0].id;
+  if (opts.djId) await addSet(db, { venueId, nightId, profileId: opts.djId, role: "dj" });
+  if (opts.mcId) await addSet(db, { venueId, nightId, profileId: opts.mcId, role: "mc" });
+  return nightId;
+}
+
+export async function addSet(
+  db: Db,
+  s: { venueId: string; nightId: string; profileId: string; role: "dj" | "mc"; startsAt?: string; endsAt?: string | null },
+): Promise<string> {
+  const { rows } = await db.query<{ id: string }>(
+    `insert into public.venue_sets (venue_id, venue_night_id, profile_id, role, starts_at, ends_at)
+     values ($1, $2, $3, $4, coalesce($5::timestamptz, now() - interval '1 hour'), $6) returning id`,
+    [s.venueId, s.nightId, s.profileId, s.role, s.startsAt ?? null, s.endsAt ?? null],
   );
   return rows[0].id;
 }
@@ -85,6 +103,8 @@ export type OrderInput = {
   type?: OrderType;
   amount?: string;
   status?: "pending_payment" | "paid" | "expired";
+  // Targeted spray; sprays are untargeted by default.
+  target?: { role: "dj" | "mc"; profileId: string };
 };
 
 export async function createOrder(db: Db, o: OrderInput): Promise<string> {
@@ -92,8 +112,9 @@ export async function createOrder(db: Db, o: OrderInput): Promise<string> {
   const status = o.status ?? "pending_payment";
   const { rows } = await db.query<{ id: string }>(
     `insert into public.orders
-       (venue_id, venue_night_id, type, status, nickname, message, song_title, spray_target, amount, paid_at)
-     values ($1, $2, $3, $4, 'Table 7', $5, $6, $7, $8, $9)
+       (venue_id, venue_night_id, type, status, nickname, message, song_title, spray_target,
+        target_profile_id, amount, paid_at)
+     values ($1, $2, $3, $4, 'Table 7', $5, $6, $7, $8, $9, $10)
      returning id`,
     [
       o.venueId,
@@ -102,7 +123,8 @@ export async function createOrder(db: Db, o: OrderInput): Promise<string> {
       status,
       type === "screen_shoutout" || type === "mc_shoutout" ? "Happy birthday Tolu!" : null,
       type === "song_request" ? "Ojuelegba" : null,
-      type === "spray" ? "dj" : null,
+      o.target?.role ?? null,
+      o.target?.profileId ?? null,
       o.amount ?? "2000.00",
       status === "paid" ? new Date() : null,
     ],

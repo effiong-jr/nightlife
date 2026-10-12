@@ -19,7 +19,11 @@ async function Dj({ searchParams }: Pick<PageProps<"/dj">, "searchParams">) {
 
   return (
     <StaffShell ctx={ctx} current="/dj">
-      <DjQueue venueId={ctx.venue.id} requestTimeoutMinutes={ctx.venue.requestTimeoutMinutes} />
+      <DjQueue
+        venueId={ctx.venue.id}
+        requestTimeoutMinutes={ctx.venue.requestTimeoutMinutes}
+        isDj={ctx.venue.roles.includes("dj")}
+      />
     </StaffShell>
   );
 }

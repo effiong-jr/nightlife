@@ -16,6 +16,7 @@ export type StaffOrder = {
   song_title: string | null;
   song_artist: string | null;
   spray_target: Enums["spray_target"] | null;
+  target: { display_name: string } | null;
   show_on_leaderboard: boolean;
   amount: string;
   paid_at: string | null;
@@ -23,7 +24,7 @@ export type StaffOrder = {
 };
 
 const ORDER_COLUMNS =
-  "id, type, status, nickname, table_label, message, song_title, song_artist, spray_target, show_on_leaderboard, amount::text, paid_at, decided_at";
+  "id, type, status, nickname, table_label, message, song_title, song_artist, spray_target, target:profiles!orders_target_profile_id_fkey(display_name), show_on_leaderboard, amount::text, paid_at, decided_at";
 const SAFETY_POLL_MS = 30_000;
 
 // Tonight's paid-or-later orders for a venue, kept live. Broadcasts on the

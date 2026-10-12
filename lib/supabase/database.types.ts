@@ -57,17 +57,23 @@ isOneToOne: false
                   ]
                 },"ledger_entries": {
                   Row: {
-                    "amount": number,"created_at": string,"currency": string,"id": string,"kind": Database["public"]['Enums']["ledger_kind"],"order_id": string,"party": Database["public"]['Enums']["ledger_party"],"profile_id": string | null,"refund_id": string | null,"venue_id": string,"venue_night_id": string
+                    "amount": number,"assigned_at": string | null,"assigned_by": string | null,"created_at": string,"currency": string,"id": string,"kind": Database["public"]['Enums']["ledger_kind"],"order_id": string,"party": Database["public"]['Enums']["ledger_party"],"profile_id": string | null,"refund_id": string | null,"venue_id": string,"venue_night_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"created_at"?: string,"currency": string,"id"?: string,"kind": Database["public"]['Enums']["ledger_kind"],"order_id": string,"party": Database["public"]['Enums']["ledger_party"],"profile_id"?: string | null,"refund_id"?: string | null,"venue_id": string,"venue_night_id": string
+                    "amount": number,"assigned_at"?: string | null,"assigned_by"?: string | null,"created_at"?: string,"currency": string,"id"?: string,"kind": Database["public"]['Enums']["ledger_kind"],"order_id": string,"party": Database["public"]['Enums']["ledger_party"],"profile_id"?: string | null,"refund_id"?: string | null,"venue_id": string,"venue_night_id": string
                   }
                   Update: {
-                    "amount"?: number,"created_at"?: string,"currency"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["ledger_kind"],"order_id"?: string,"party"?: Database["public"]['Enums']["ledger_party"],"profile_id"?: string | null,"refund_id"?: string | null,"venue_id"?: string,"venue_night_id"?: string
+                    "amount"?: number,"assigned_at"?: string | null,"assigned_by"?: string | null,"created_at"?: string,"currency"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["ledger_kind"],"order_id"?: string,"party"?: Database["public"]['Enums']["ledger_party"],"profile_id"?: string | null,"refund_id"?: string | null,"venue_id"?: string,"venue_night_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "ledger_entries_assigned_by_fkey"
+      columns: ["assigned_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "ledger_entries_order_id_venue_id_fkey"
       columns: ["order_id","venue_id"]
 isOneToOne: false
@@ -101,19 +107,37 @@ isOneToOne: false
                   ]
                 },"orders": {
                   Row: {
-                    "amount": number,"created_at": string,"currency": string,"decided_at": string | null,"decided_by": string | null,"id": string,"message": string | null,"nickname": string,"paid_at": string | null,"show_on_leaderboard": boolean,"song_artist": string | null,"song_title": string | null,"spray_target": Database["public"]['Enums']["spray_target"] | null,"status": Database["public"]['Enums']["order_status"],"table_label": string | null,"type": Database["public"]['Enums']["order_type"],"venue_id": string,"venue_night_id": string,"screen_display_name": string | null
+                    "amount": number,"created_at": string,"currency": string,"decided_at": string | null,"decided_by": string | null,"dj_set_id": string | null,"id": string,"mc_set_id": string | null,"message": string | null,"nickname": string,"paid_at": string | null,"show_on_leaderboard": boolean,"song_artist": string | null,"song_title": string | null,"spray_target": Database["public"]['Enums']["spray_target"] | null,"status": Database["public"]['Enums']["order_status"],"table_label": string | null,"target_profile_id": string | null,"type": Database["public"]['Enums']["order_type"],"venue_id": string,"venue_night_id": string,"screen_display_name": string | null
                   }
                   ComputedFields: "screen_display_name"
                   Insert: {
-                    "amount": number,"created_at"?: string,"currency"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"id"?: string,"message"?: string | null,"nickname": string,"paid_at"?: string | null,"show_on_leaderboard"?: boolean,"song_artist"?: string | null,"song_title"?: string | null,"spray_target"?: Database["public"]['Enums']["spray_target"] | null,"status"?: Database["public"]['Enums']["order_status"],"table_label"?: string | null,"type": Database["public"]['Enums']["order_type"],"venue_id": string,"venue_night_id": string
+                    "amount": number,"created_at"?: string,"currency"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"dj_set_id"?: string | null,"id"?: string,"mc_set_id"?: string | null,"message"?: string | null,"nickname": string,"paid_at"?: string | null,"show_on_leaderboard"?: boolean,"song_artist"?: string | null,"song_title"?: string | null,"spray_target"?: Database["public"]['Enums']["spray_target"] | null,"status"?: Database["public"]['Enums']["order_status"],"table_label"?: string | null,"target_profile_id"?: string | null,"type": Database["public"]['Enums']["order_type"],"venue_id": string,"venue_night_id": string
                   }
                   Update: {
-                    "amount"?: number,"created_at"?: string,"currency"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"id"?: string,"message"?: string | null,"nickname"?: string,"paid_at"?: string | null,"show_on_leaderboard"?: boolean,"song_artist"?: string | null,"song_title"?: string | null,"spray_target"?: Database["public"]['Enums']["spray_target"] | null,"status"?: Database["public"]['Enums']["order_status"],"table_label"?: string | null,"type"?: Database["public"]['Enums']["order_type"],"venue_id"?: string,"venue_night_id"?: string
+                    "amount"?: number,"created_at"?: string,"currency"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"dj_set_id"?: string | null,"id"?: string,"mc_set_id"?: string | null,"message"?: string | null,"nickname"?: string,"paid_at"?: string | null,"show_on_leaderboard"?: boolean,"song_artist"?: string | null,"song_title"?: string | null,"spray_target"?: Database["public"]['Enums']["spray_target"] | null,"status"?: Database["public"]['Enums']["order_status"],"table_label"?: string | null,"target_profile_id"?: string | null,"type"?: Database["public"]['Enums']["order_type"],"venue_id"?: string,"venue_night_id"?: string
                   }
                   Relationships: [
                     {
       foreignKeyName: "orders_decided_by_fkey"
       columns: ["decided_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_dj_set_id_fkey"
+      columns: ["dj_set_id"]
+isOneToOne: false
+      referencedRelation: "venue_sets"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_mc_set_id_fkey"
+      columns: ["mc_set_id"]
+isOneToOne: false
+      referencedRelation: "venue_sets"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_target_profile_id_fkey"
+      columns: ["target_profile_id"]
 isOneToOne: false
       referencedRelation: "profiles"
       referencedColumns: ["id"]
@@ -257,29 +281,17 @@ isOneToOne: false
                   ]
                 },"venue_nights": {
                   Row: {
-                    "closed_at": string | null,"created_at": string,"dj_profile_id": string | null,"id": string,"mc_profile_id": string | null,"night_date": string,"opened_at": string | null,"settled_at": string | null,"venue_id": string
+                    "closed_at": string | null,"created_at": string,"id": string,"night_date": string,"opened_at": string | null,"settled_at": string | null,"venue_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "closed_at"?: string | null,"created_at"?: string,"dj_profile_id"?: string | null,"id"?: string,"mc_profile_id"?: string | null,"night_date": string,"opened_at"?: string | null,"settled_at"?: string | null,"venue_id": string
+                    "closed_at"?: string | null,"created_at"?: string,"id"?: string,"night_date": string,"opened_at"?: string | null,"settled_at"?: string | null,"venue_id": string
                   }
                   Update: {
-                    "closed_at"?: string | null,"created_at"?: string,"dj_profile_id"?: string | null,"id"?: string,"mc_profile_id"?: string | null,"night_date"?: string,"opened_at"?: string | null,"settled_at"?: string | null,"venue_id"?: string
+                    "closed_at"?: string | null,"created_at"?: string,"id"?: string,"night_date"?: string,"opened_at"?: string | null,"settled_at"?: string | null,"venue_id"?: string
                   }
                   Relationships: [
                     {
-      foreignKeyName: "venue_nights_dj_profile_id_fkey"
-      columns: ["dj_profile_id"]
-isOneToOne: false
-      referencedRelation: "profiles"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "venue_nights_mc_profile_id_fkey"
-      columns: ["mc_profile_id"]
-isOneToOne: false
-      referencedRelation: "profiles"
-      referencedColumns: ["id"]
-    },{
       foreignKeyName: "venue_nights_venue_id_fkey"
       columns: ["venue_id"]
 isOneToOne: false
@@ -305,6 +317,44 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "venues"
       referencedColumns: ["id"]
+    }
+                  ]
+                },"venue_sets": {
+                  Row: {
+                    "confirmed_by": string | null,"created_at": string,"ends_at": string | null,"id": string,"profile_id": string,"role": Database["public"]['Enums']["staff_role"],"source": string,"span": unknown,"starts_at": string,"venue_id": string,"venue_night_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "confirmed_by"?: string | null,"created_at"?: string,"ends_at"?: string | null,"id"?: string,"profile_id": string,"role": Database["public"]['Enums']["staff_role"],"source"?: string,"span"?: never,"starts_at"?: string,"venue_id": string,"venue_night_id": string
+                  }
+                  Update: {
+                    "confirmed_by"?: string | null,"created_at"?: string,"ends_at"?: string | null,"id"?: string,"profile_id"?: string,"role"?: Database["public"]['Enums']["staff_role"],"source"?: string,"span"?: never,"starts_at"?: string,"venue_id"?: string,"venue_night_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "venue_sets_confirmed_by_fkey"
+      columns: ["confirmed_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "venue_sets_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "venue_sets_venue_id_fkey"
+      columns: ["venue_id"]
+isOneToOne: false
+      referencedRelation: "venues"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "venue_sets_venue_night_id_venue_id_fkey"
+      columns: ["venue_night_id","venue_id"]
+isOneToOne: false
+      referencedRelation: "venue_nights"
+      referencedColumns: ["id","venue_id"]
     }
                   ]
                 },"venue_splits": {
@@ -359,6 +409,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"venue_target_splits": {
+                  Row: {
+                    "club_bps": number,"platform_bps": number,"target_bps": number,"venue_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "club_bps"?: number,"platform_bps"?: number,"target_bps"?: number,"venue_id": string
+                  }
+                  Update: {
+                    "club_bps"?: number,"platform_bps"?: number,"target_bps"?: number,"venue_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "venue_target_splits_venue_id_fkey"
+      columns: ["venue_id"]
+isOneToOne: true
+      referencedRelation: "venues"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"venues": {
                   Row: {
                     "address": string | null,"created_at": string,"currency": string,"id": string,"name": string,"request_timeout_minutes": number,"slug": string,"status": Database["public"]['Enums']["venue_status"]
@@ -407,6 +477,9 @@ isOneToOne: false
               "amount": number,"party": Database["public"]['Enums']["ledger_party"]
             }[]
                            },
+"end_set":
+{ Args: { "p_set_id": string }; Returns: undefined
+                           },
 "has_venue_role":
 { Args: { "p_roles": (Database["public"]['Enums']["staff_role"])[],"p_venue_id": string }; Returns: boolean
                            },
@@ -415,6 +488,14 @@ isOneToOne: false
                            },
 "is_venue_staff":
 { Args: { "p_venue_id": string }; Returns: boolean
+                           },
+"night_settlement_amounts":
+{ Args: { "p_venue_night_id": string }; Returns: {
+              "amount": number,"currency": string,"party": Database["public"]['Enums']["ledger_party"],"profile_id": string
+            }[]
+                           },
+"night_unassigned_total":
+{ Args: { "p_venue_night_id": string }; Returns: number
                            },
 "record_paid_order":
 { Args: { "p_amount": number,"p_checkout_id": string,"p_collection_id": string,"p_currency": string,"p_event_id": string,"p_event_type": string,"p_order_id": string,"p_payload": Json,"p_provider": string }; Returns: string
@@ -430,6 +511,14 @@ isOneToOne: false
                            },
 "shares_venue_with":
 { Args: { "p_profile_id": string }; Returns: boolean
+                           },
+"start_set":
+{ Args: { "p_profile_id": string,"p_role": Database["public"]['Enums']["staff_role"],"p_venue_id": string }; Returns: string
+                           },
+"venue_spray_targets":
+{ Args: { "p_venue_id": string }; Returns: {
+              "name": string,"on_now": boolean,"profile_id": string,"role": Database["public"]['Enums']["staff_role"]
+            }[]
                            }
           }
           Enums: {

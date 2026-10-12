@@ -31,9 +31,11 @@ const ORDERS = [
   { type: "mc_shoutout", nickname: "Seyi", table_label: "VIP 2", message: "Big ups to the Unilag class of 2016, we still dey!", amount: "5000.00" },
   { type: "screen_shoutout", nickname: "Funmi", table_label: "Table 9", message: "Congrats on the new job Dayo! 🎉", amount: "2000.00" },
   { type: "screen_shoutout", nickname: "Emeka", table_label: "Table 1", message: "Lagos to the world! Happy birthday Nneka", amount: "4000.00" },
-  { type: "spray", nickname: "Big Tunde", table_label: "Table 7", spray_target: "dj", amount: "20000.00" },
-  { type: "spray", nickname: "Amaka", table_label: "Table 3", spray_target: "celebrant", message: "Ada", amount: "50000.00" },
-  { type: "spray", nickname: "Quiet Money", table_label: "VIP 1", spray_target: "mc", amount: "100000.00", show_on_leaderboard: false },
+  // target: spray a named DJ/MC (the staff member currently on that role's set,
+  // else the first in that role); omitted = untargeted spray.
+  { type: "spray", nickname: "Big Tunde", table_label: "Table 7", target: "dj", amount: "20000.00" },
+  { type: "spray", nickname: "Amaka", table_label: "Table 3", amount: "50000.00" },
+  { type: "spray", nickname: "Quiet Money", table_label: "VIP 1", target: "mc", amount: "100000.00", show_on_leaderboard: false },
 ];
 
 const { data: venue, error: venueError } = await admin.from("venues").select("id").eq("slug", VENUE_SLUG).maybeSingle();
@@ -53,11 +55,21 @@ if (!night) {
   process.exit(1);
 }
 
-for (const order of ORDERS) {
+const { data: targets } = await admin.rpc("venue_spray_targets", { p_venue_id: venue.id });
+const targetFor = (role) =>
+  (targets ?? []).find((t) => t.role === role && t.on_now) ?? (targets ?? []).find((t) => t.role === role);
+
+for (const { target, ...order } of ORDERS) {
   const id = randomUUID();
-  const { error: insertError } = await admin
-    .from("orders")
-    .insert({ id, venue_id: venue.id, venue_night_id: night.id, ...order });
+  const person = target ? targetFor(target) : null;
+  const { error: insertError } = await admin.from("orders").insert({
+    id,
+    venue_id: venue.id,
+    venue_night_id: night.id,
+    ...order,
+    spray_target: person ? target : null,
+    target_profile_id: person?.profile_id ?? null,
+  });
   if (insertError) throw insertError;
 
   const { data: result, error: payError } = await admin.rpc("record_paid_order", {
@@ -72,7 +84,8 @@ for (const order of ORDERS) {
     p_currency: "NGN",
   });
   if (payError) throw payError;
-  console.log(`${result.padEnd(9)} ${order.type.padEnd(16)} ₦${order.amount.padStart(10)}  ${order.nickname}`);
+  const to = person ? `  → ${person.name}` : "";
+  console.log(`${result.padEnd(9)} ${order.type.padEnd(16)} ₦${order.amount.padStart(10)}  ${order.nickname}${to}`);
   // Spread sprays out so the club screen shows each one.
   if (order.type === "spray") await new Promise((r) => setTimeout(r, 1500));
 }

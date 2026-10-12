@@ -3,6 +3,7 @@
 import { formatNaira, fromMinorUnits, toMinorUnits } from "@/lib/money";
 import { type StaffOrder, useNow, useVenueOrders } from "@/lib/realtime/use-venue-orders";
 import { ActionButton, Empty, ErrorBar, LiveBadge, SectionTitle, Who, minutesAgo } from "../_components/order-ui";
+import { Lineup } from "./lineup";
 
 const TYPE_LABELS: Record<StaffOrder["type"], string> = {
   spray: "Sprays",
@@ -42,6 +43,8 @@ export function ClubLive({ venueId, venueSlug }: { venueId: string; venueSlug: s
         <Empty>No night is open. Opening and closing nights comes with the next part of the dashboard.</Empty>
       ) : (
         <>
+          {nightId && <Lineup venueId={venueId} nightId={nightId} />}
+
           <section>
             <SectionTitle count={toApprove.length}>Approve for the screen</SectionTitle>
             {toApprove.length === 0 ? (

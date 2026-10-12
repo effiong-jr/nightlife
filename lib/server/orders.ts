@@ -29,7 +29,9 @@ export const orderInputSchema = z
     message: text(140).optional(),
     songTitle: text(120).optional(),
     songArtist: text(120).optional(),
-    sprayTarget: z.enum(["dj", "mc", "celebrant"]).optional(),
+    // Targeted spray: a DJ or MC who is active staff at the venue (checked in
+    // the database). Omitted for an untargeted spray.
+    sprayTarget: z.object({ role: z.enum(["dj", "mc"]), profileId: z.uuid() }).optional(),
     showOnLeaderboard: z.boolean().default(true),
   })
   .superRefine((o, ctx) => {
@@ -43,8 +45,8 @@ export const orderInputSchema = z
       const check = checkText(value);
       if (!check.ok) ctx.addIssue({ code: "custom", path: [field], message: FILTER_MESSAGES[check.reason] });
     }
-    if (o.type === "spray" && !o.sprayTarget) {
-      ctx.addIssue({ code: "custom", path: ["sprayTarget"], message: "Choose who to spray" });
+    if (o.type !== "spray" && o.sprayTarget) {
+      ctx.addIssue({ code: "custom", path: ["sprayTarget"], message: "Only sprays have a target" });
     }
     if ((o.type === "screen_shoutout" || o.type === "mc_shoutout") && !o.message) {
       ctx.addIssue({ code: "custom", path: ["message"], message: "Write your shoutout" });
@@ -110,17 +112,19 @@ export async function createOrderAndCheckout(
     type: input.type,
     nickname: input.nickname,
     table_label: input.tableLabel ?? null,
-    message: input.message ?? null,
+    message: input.type === "screen_shoutout" || input.type === "mc_shoutout" ? input.message : null,
     song_title: input.songTitle ?? null,
     song_artist: input.songArtist ?? null,
-    spray_target: input.type === "spray" ? input.sprayTarget : null,
+    spray_target: input.sprayTarget?.role ?? null,
+    target_profile_id: input.sprayTarget?.profileId ?? null,
     show_on_leaderboard: input.showOnLeaderboard,
     amount: numeric(input.amount),
     currency: venue.currency,
   });
   if (insertError) {
     // 42501: RLS said no (below minimum, type paused, night closed...).
-    if (insertError.code === "42501") {
+    // 23514: the spray target isn't active staff here (any more).
+    if (insertError.code === "42501" || insertError.code === "23514") {
       throw new OrderRejectedError("Order not allowed", "not_allowed");
     }
     throw insertError;

@@ -4,15 +4,14 @@ import { formatNairaShort, toMinorUnits } from "@/lib/money";
 // never cheesy or offensive. Lines are picked deterministically from the
 // order ID so a screen reload shows the same line.
 
-export type SprayTarget = "dj" | "mc" | "celebrant";
-
 export type ScreenSpray = {
   id: string;
   name: string; // already "A big spender" when the attendee opted out
   table: string | null;
   amount: string;
-  target: SprayTarget | null;
-  celebrant: string | null;
+  // Targeted sprays name a DJ or MC; untargeted sprays have neither.
+  target: "dj" | "mc" | null;
+  targetName: string | null;
 };
 
 const HEADLINES = [
@@ -47,19 +46,13 @@ export function sprayHeadline(spray: ScreenSpray): string {
   return pick(lines, spray.id).replace("{who}", who);
 }
 
-// "₦50k spray for the DJ!"
+// "₦50k spray for DJ Spinall!" / "₦50k spray!"
 export function spraySubline(spray: ScreenSpray): string {
   const amount = `${formatNairaShort(spray.amount)} spray`;
-  switch (spray.target) {
-    case "dj":
-      return `${amount} for the DJ!`;
-    case "mc":
-      return `${amount} for the hype man!`;
-    case "celebrant":
-      return spray.celebrant ? `${amount} for ${spray.celebrant}!` : `${amount} for the celebrant!`;
-    default:
-      return `${amount}!`;
-  }
+  if (spray.targetName) return `${amount} for ${spray.targetName}!`;
+  if (spray.target === "dj") return `${amount} for the DJ!`;
+  if (spray.target === "mc") return `${amount} for the hype man!`;
+  return `${amount}!`;
 }
 
 // Who sent it, when the headline used the table: "Big Tunde, Table 7".

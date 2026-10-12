@@ -19,7 +19,7 @@ async function Mc({ searchParams }: Pick<PageProps<"/mc">, "searchParams">) {
 
   return (
     <StaffShell ctx={ctx} current="/mc">
-      <McView venueId={ctx.venue.id} />
+      <McView venueId={ctx.venue.id} isMc={ctx.venue.roles.includes("mc")} />
     </StaffShell>
   );
 }

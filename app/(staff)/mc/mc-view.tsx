@@ -5,8 +5,9 @@ import { formatNairaShort } from "@/lib/money";
 import { isBigSpray, sprayHeadline, spraySubline } from "@/lib/screen/hype";
 import { ActionButton, Empty, ErrorBar, LiveBadge, SectionTitle, Who, minutesAgo } from "../_components/order-ui";
 
-// Reading a shoutout on the mic is the human approval for MC shoutouts.
-export function McView({ venueId }: { venueId: string }) {
+// Reading a shoutout on the mic is the human approval for MC shoutouts. Only an
+// MC can mark one read: the MC share goes to whoever does.
+export function McView({ venueId, isMc }: { venueId: string; isMc: boolean }) {
   const { orders, nightId, loaded, live, error, setStatus } = useVenueOrders(venueId);
   const now = useNow();
 
@@ -42,9 +43,11 @@ export function McView({ venueId }: { venueId: string }) {
                       <span className="text-xs text-muted-foreground">{minutesAgo(o.paid_at, now)}</span>
                     </div>
                     <div className="mt-4 flex gap-2">
-                      <ActionButton tone="go" onClick={() => setStatus(o.id, "fulfilled")}>
-                        Read it ✓
-                      </ActionButton>
+                      {isMc && (
+                        <ActionButton tone="go" onClick={() => setStatus(o.id, "fulfilled")}>
+                          Read it ✓
+                        </ActionButton>
+                      )}
                       <ActionButton tone="stop" onClick={() => setStatus(o.id, "rejected")}>
                         Skip
                       </ActionButton>
@@ -68,8 +71,8 @@ export function McView({ venueId }: { venueId: string }) {
                     name: o.show_on_leaderboard ? o.nickname : "A big spender",
                     table: o.table_label,
                     amount: o.amount,
-                    target: o.spray_target,
-                    celebrant: o.spray_target === "celebrant" ? o.message : null,
+                    target: o.spray_target === "dj" || o.spray_target === "mc" ? o.spray_target : null,
+                    targetName: o.target?.display_name ?? null,
                   };
                   return (
                     <li key={o.id} className="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4">

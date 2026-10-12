@@ -14,7 +14,6 @@ const attendeeOrder = (venueId: string, nightId: string, overrides: Record<strin
     venue_night_id: nightId,
     type: "spray",
     nickname: "Table 7",
-    spray_target: "dj",
     amount: "2000.00",
     currency: "NGN",
     ...overrides,
@@ -45,9 +44,12 @@ describe("attendees (anon)", () => {
           expect(db.query(`select 1 from public.${table}`)).rejects.toThrow(/permission denied/),
         );
       }
-      // Night columns naming staff are not public.
+      // Night columns beyond the public ones aren't readable, and nor is the lineup.
       await as(db, "anon", () =>
-        expect(db.query("select dj_profile_id from public.venue_nights")).rejects.toThrow(/permission denied/),
+        expect(db.query("select settled_at from public.venue_nights")).rejects.toThrow(/permission denied/),
+      );
+      await as(db, "anon", () =>
+        expect(db.query("select 1 from public.venue_sets")).rejects.toThrow(/permission denied/),
       );
     });
   });
@@ -142,14 +144,20 @@ describe("multi-club isolation", () => {
     });
   });
 
-  it("can't put another venue's DJ on duty", async () => {
+  it("can't put another venue's DJ on a set", async () => {
     await withTx(async (db) => {
       const a = await createStaffedVenue(db);
       const b = await createStaffedVenue(db);
       await as(db, { userId: a.managerId }, () =>
         expect(
-          db.query("update public.venue_nights set dj_profile_id = $1 where id = $2", [b.djId, a.nightId]),
-        ).rejects.toThrow(/not an active DJ/),
+          db.query("select public.start_set($1, 'dj', $2)", [a.venueId, b.djId]),
+        ).rejects.toThrow(/not an active dj/),
+      );
+      // ...nor manage another venue's lineup at all.
+      await as(db, { userId: a.managerId }, () =>
+        expect(db.query("select public.start_set($1, 'dj', $2)", [b.venueId, b.djId])).rejects.toThrow(
+          /row-level security/,
+        ),
       );
     });
   });
@@ -280,14 +288,25 @@ describe("order decisions", () => {
     });
   });
 
-  it("a new DJ can be added and put on duty", async () => {
+  it("a manager can hand the decks to a new DJ, and only managers can", async () => {
     await withTx(async (db) => {
       const v = await createStaffedVenue(db);
       const newDj = await createUser(db);
       await addStaff(db, v.venueId, newDj, "dj");
+      await as(db, { userId: v.djId }, () =>
+        expect(db.query("select public.start_set($1, 'dj', $2)", [v.venueId, newDj])).rejects.toThrow(),
+      );
       await as(db, { userId: v.managerId }, async () => {
-        const res = await db.query("update public.venue_nights set dj_profile_id = $1 where id = $2", [newDj, v.nightId]);
-        expect(res.rowCount).toBe(1);
+        await db.query("select public.start_set($1, 'dj', $2)", [v.venueId, newDj]);
+        const { rows } = await db.query(
+          "select profile_id, upper(span) is null as open from public.venue_sets where venue_id = $1 and role = 'dj' order by starts_at, open",
+          [v.venueId],
+        );
+        // In one transaction now() doesn't move, so the old set ends where the new one starts.
+        expect(rows.map((r) => [r.profile_id, r.open])).toEqual([
+          [v.djId, false],
+          [newDj, true],
+        ]);
       });
     });
   });

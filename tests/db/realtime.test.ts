@@ -42,7 +42,7 @@ describe("order broadcasts", () => {
         {
           event: "spray",
           private: false,
-          payload: { id: orderId, name: "Table 7", table: null, amount: "50000.00", target: "dj", celebrant: null },
+          payload: { id: orderId, name: "Table 7", table: null, amount: "50000.00", target: null, targetName: null },
         },
       ]);
     });

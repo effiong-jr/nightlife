@@ -7,7 +7,7 @@ const spray = (overrides: Partial<ScreenSpray> = {}): ScreenSpray => ({
   table: "Table 7",
   amount: "20000.00",
   target: "dj",
-  celebrant: null,
+  targetName: "DJ Spinall",
   ...overrides,
 });
 
@@ -22,9 +22,12 @@ describe("screen hype copy", () => {
   });
 
   it("names the target with a compact amount", () => {
-    expect(spraySubline(spray())).toBe("₦20k spray for the DJ!");
-    expect(spraySubline(spray({ target: "mc", amount: "1500.00" }))).toBe("₦1.5k spray for the hype man!");
-    expect(spraySubline(spray({ target: "celebrant", celebrant: "Tolu" }))).toBe("₦20k spray for Tolu!");
+    expect(spraySubline(spray())).toBe("₦20k spray for DJ Spinall!");
+    expect(spraySubline(spray({ target: "mc", targetName: "MC Tolu", amount: "1500.00" }))).toBe(
+      "₦1.5k spray for MC Tolu!",
+    );
+    expect(spraySubline(spray({ target: "mc", targetName: null }))).toBe("₦20k spray for the hype man!");
+    expect(spraySubline(spray({ target: null, targetName: null }))).toBe("₦20k spray!");
   });
 
   it("never pairs an opted-out nickname with the amount", () => {

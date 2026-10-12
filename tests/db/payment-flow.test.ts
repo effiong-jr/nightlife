@@ -68,14 +68,18 @@ async function setUpVenue() {
       { venue_id: venue.id, profile_id: mcId, role: "mc" },
     ]),
   );
+  const night = await must(
+    admin
+      .from("venue_nights")
+      .insert({ venue_id: venue.id, night_date: new Date().toISOString().slice(0, 10), opened_at: new Date().toISOString() })
+      .select("id")
+      .single(),
+  );
   await exec(
-    admin.from("venue_nights").insert({
-      venue_id: venue.id,
-      night_date: new Date().toISOString().slice(0, 10),
-      dj_profile_id: djId,
-      mc_profile_id: mcId,
-      opened_at: new Date().toISOString(),
-    }),
+    admin.from("venue_sets").insert([
+      { venue_id: venue.id, venue_night_id: night.id, profile_id: djId, role: "dj" },
+      { venue_id: venue.id, venue_night_id: night.id, profile_id: mcId, role: "mc" },
+    ]),
   );
   return { slug, venueId: venue.id, djId, mcId };
 }
@@ -97,7 +101,7 @@ function fakeBachs() {
 async function placeOrder(slug: string, amount = "5000.00") {
   const bachs = fakeBachs();
   const result = await createOrderAndCheckout(
-    { venueSlug: slug, type: "spray", nickname: "Table 7", sprayTarget: "dj", amount },
+    { venueSlug: slug, type: "spray", nickname: "Table 7", amount },
     { db: anon, admin, provider: bachs.provider, appUrl: "http://localhost:3000" },
   );
   return { ...result, checkoutId: bachs.checkouts[0] };

@@ -6,6 +6,9 @@ export type OrderType = Database["public"]["Enums"]["order_type"];
 
 export type VenueOption = { type: OrderType; enabled: boolean; minAmount: string };
 
+// A DJ or MC an attendee can spray by name.
+export type SprayTarget = { profileId: string; role: "dj" | "mc"; name: string; onNow: boolean };
+
 export type PublicVenue = {
   id: string;
   slug: string;
@@ -14,6 +17,7 @@ export type PublicVenue = {
   requestTimeoutMinutes: number;
   isOpen: boolean;
   options: VenueOption[];
+  sprayTargets: SprayTarget[];
 };
 
 const ORDER_TYPES: OrderType[] = ["spray", "screen_shoutout", "mc_shoutout", "song_request"];
@@ -33,7 +37,7 @@ export async function getPublicVenue(slug: string): Promise<PublicVenue | null> 
   if (error) throw error;
   if (!venue) return null;
 
-  const [pricing, night] = await Promise.all([
+  const [pricing, night, targets] = await Promise.all([
     db.from("venue_pricing").select("order_type, enabled, min_amount::text").eq("venue_id", venue.id),
     db
       .from("venue_nights")
@@ -42,9 +46,11 @@ export async function getPublicVenue(slug: string): Promise<PublicVenue | null> 
       .not("opened_at", "is", null)
       .is("closed_at", null)
       .maybeSingle(),
+    db.rpc("venue_spray_targets", { p_venue_id: venue.id }),
   ]);
   if (pricing.error) throw pricing.error;
   if (night.error) throw night.error;
+  if (targets.error) throw targets.error;
 
   const byType = new Map(pricing.data.map((p) => [p.order_type, p]));
   const options = ORDER_TYPES.flatMap((type) => {
@@ -60,5 +66,10 @@ export async function getPublicVenue(slug: string): Promise<PublicVenue | null> 
     requestTimeoutMinutes: venue.request_timeout_minutes,
     isOpen: night.data !== null,
     options,
+    sprayTargets: targets.data.flatMap((t) =>
+      t.role === "dj" || t.role === "mc"
+        ? [{ profileId: t.profile_id, role: t.role, name: t.name, onNow: t.on_now }]
+        : [],
+    ),
   };
 }

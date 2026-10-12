@@ -8,7 +8,17 @@ import { numeric } from "@/lib/supabase/numeric";
 import { ActionButton, Empty, ErrorBar, LiveBadge, SectionTitle, Who, minutesAgo } from "../_components/order-ui";
 
 // The DJ always has the final say: anything can be rejected (and is refunded).
-export function DjQueue({ venueId, requestTimeoutMinutes }: { venueId: string; requestTimeoutMinutes: number }) {
+// Only a DJ can mark a song played: the DJ share goes to whoever does. Accepted
+// requests stay in this venue-wide queue, so they carry over at a changeover.
+export function DjQueue({
+  venueId,
+  requestTimeoutMinutes,
+  isDj,
+}: {
+  venueId: string;
+  requestTimeoutMinutes: number;
+  isDj: boolean;
+}) {
   const { orders, nightId, loaded, live, error, setStatus } = useVenueOrders(venueId);
   const now = useNow();
 
@@ -59,16 +69,20 @@ export function DjQueue({ venueId, requestTimeoutMinutes }: { venueId: string; r
           <section>
             <SectionTitle count={upNext.length}>Up next</SectionTitle>
             {upNext.length === 0 ? (
-              <Empty>Accepted requests wait here until you play them.</Empty>
+              <Empty>
+                Accepted requests wait here until they&apos;re played. They carry over to the next DJ at changeover.
+              </Empty>
             ) : (
               <ul className="flex flex-col gap-3">
                 {upNext.map((o) => (
                   <SongCard key={o.id} order={o}>
                     <RefundCountdown order={o} timeoutMinutes={requestTimeoutMinutes} now={now} />
                     <div className="flex gap-2">
-                      <ActionButton tone="go" onClick={() => setStatus(o.id, "fulfilled")}>
-                        Played
-                      </ActionButton>
+                      {isDj && (
+                        <ActionButton tone="go" onClick={() => setStatus(o.id, "fulfilled")}>
+                          Played
+                        </ActionButton>
+                      )}
                       <ActionButton tone="stop" onClick={() => setStatus(o.id, "rejected")}>
                         Drop
                       </ActionButton>

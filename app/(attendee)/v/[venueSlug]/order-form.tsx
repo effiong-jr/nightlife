@@ -3,26 +3,25 @@
 import { useState } from "react";
 import { formatNaira, nairaToAmount, toMinorUnits } from "@/lib/money";
 import { checkText, FILTER_MESSAGES } from "@/lib/moderation/word-filter";
-import type { OrderType, VenueOption } from "@/lib/server/venues";
+import type { OrderType, SprayTarget, VenueOption } from "@/lib/server/venues";
 
 // Attendee checkout: choose -> details -> amount -> nickname -> pay.
 // Deliberately dependency-free (no UI kit, no Zod) to stay light on weak signal.
 // The server re-validates everything.
 
-type SprayTarget = "dj" | "mc" | "celebrant";
+// "everyone" = untargeted spray; otherwise "<profileId>:<role>" (someone can be
+// staff as both DJ and MC).
+type SprayChoice = "everyone" | string;
+const choiceKey = (t: SprayTarget) => `${t.profileId}:${t.role}`;
 
 const TYPES: Record<OrderType, { emoji: string; title: string; blurb: string }> = {
-  spray: { emoji: "💸", title: "Spray", blurb: "Make it rain on the DJ, hype man or a celebrant" },
+  spray: { emoji: "💸", title: "Spray", blurb: "Make it rain on the DJ, the hype man or the whole place" },
   screen_shoutout: { emoji: "📺", title: "Screen shoutout", blurb: "Your message on the big screen" },
   mc_shoutout: { emoji: "🎤", title: "MC shoutout", blurb: "The hype man calls it on the mic" },
   song_request: { emoji: "🎵", title: "Request a song", blurb: "The DJ decides what plays" },
 };
 
-const SPRAY_TARGETS: { value: SprayTarget; label: string }[] = [
-  { value: "dj", label: "The DJ" },
-  { value: "mc", label: "Hype man" },
-  { value: "celebrant", label: "Celebrant" },
-];
+const ROLE_LABELS = { dj: "DJ", mc: "Hype man" } as const;
 
 const PRESET_LADDER = ["1000", "2000", "5000", "10000", "20000", "50000", "100000", "200000"];
 const NICKNAME_KEY = "nightlife:nickname";
@@ -35,15 +34,17 @@ export function OrderForm({
   venueSlug,
   tableLabel,
   options,
+  sprayTargets,
   requestTimeoutMinutes,
 }: {
   venueSlug: string;
   tableLabel: string | null;
   options: VenueOption[];
+  sprayTargets: SprayTarget[];
   requestTimeoutMinutes: number;
 }) {
   const [type, setType] = useState<OrderType | null>(null);
-  const [sprayTarget, setSprayTarget] = useState<SprayTarget | null>(null);
+  const [sprayChoice, setSprayChoice] = useState<SprayChoice | null>(null);
   const [message, setMessage] = useState("");
   const [songTitle, setSongTitle] = useState("");
   const [songArtist, setSongArtist] = useState("");
@@ -59,7 +60,7 @@ export function OrderForm({
   const presets = minAmount ? presetsFor(minAmount) : [];
   const amount = custom ? nairaToAmount(custom) : preset;
   const needsMessage = type === "screen_shoutout" || type === "mc_shoutout";
-  const needsCelebrant = type === "spray" && sprayTarget === "celebrant";
+  const target = sprayTargets.find((t) => choiceKey(t) === sprayChoice) ?? null;
 
   function choose(next: OrderType) {
     // The nickname field appears now; prefill it from last time.
@@ -87,9 +88,9 @@ export function OrderForm({
     if (!nickname.trim()) e.nickname = "Add a nickname so they know who it's from";
     else e.nickname = filtered(nickname);
 
-    if (type === "spray" && !sprayTarget) e.sprayTarget = "Who are you spraying?";
-    if (needsMessage || needsCelebrant) {
-      if (!message.trim()) e.message = needsCelebrant ? "Who's the celebrant?" : "Write your shoutout";
+    if (type === "spray" && !sprayChoice) e.sprayTarget = "Who are you spraying?";
+    if (needsMessage) {
+      if (!message.trim()) e.message = "Write your shoutout";
       else e.message = filtered(message);
     }
     if (type === "song_request" && !songTitle.trim()) e.songTitle = "Which song?";
@@ -126,10 +127,10 @@ export function OrderForm({
           nickname: nickname.trim(),
           amount,
           tableLabel: tableLabel ?? undefined,
-          message: needsMessage || needsCelebrant ? message.trim() : undefined,
+          message: needsMessage ? message.trim() : undefined,
           songTitle: type === "song_request" ? songTitle.trim() : undefined,
           songArtist: type === "song_request" && songArtist.trim() ? songArtist.trim() : undefined,
-          sprayTarget: type === "spray" ? sprayTarget : undefined,
+          sprayTarget: type === "spray" && target ? { role: target.role, profileId: target.profileId } : undefined,
           showOnLeaderboard,
         }),
       });
@@ -182,10 +183,21 @@ export function OrderForm({
       {type === "spray" && (
         <fieldset>
           <legend className="mb-3 text-lg font-semibold">Spray who?</legend>
-          <div className="grid grid-cols-3 gap-2">
-            {SPRAY_TARGETS.map((t) => (
-              <Chip key={t.value} selected={sprayTarget === t.value} onClick={() => setSprayTarget(t.value)}>
-                {t.label}
+          <div className="grid grid-cols-2 gap-2">
+            <Chip selected={sprayChoice === "everyone"} onClick={() => setSprayChoice("everyone")}>
+              Everyone 🔥
+            </Chip>
+            {sprayTargets.map((t) => (
+              <Chip
+                key={choiceKey(t)}
+                selected={sprayChoice === choiceKey(t)}
+                onClick={() => setSprayChoice(choiceKey(t))}
+              >
+                <span className="block truncate px-2">{t.name}</span>
+                <span className="block text-xs font-normal text-neutral-400">
+                  {ROLE_LABELS[t.role]}
+                  {t.onNow && " · on now"}
+                </span>
               </Chip>
             ))}
           </div>
@@ -193,31 +205,19 @@ export function OrderForm({
         </fieldset>
       )}
 
-      {(needsMessage || needsCelebrant) && (
-        <Field label={needsCelebrant ? "Celebrant's name" : "Your shoutout"} error={errors.message}>
-          {needsCelebrant ? (
-            <input
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              maxLength={40}
-              placeholder="e.g. Tolu"
-              className={inputClass}
-            />
-          ) : (
-            <>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                maxLength={MAX_MESSAGE}
-                rows={3}
-                placeholder="e.g. Happy birthday Tolu! Table 7 loves you 🎉"
-                className={`${inputClass} resize-none`}
-              />
-              <p className="mt-1 text-right text-xs text-neutral-500">
-                {message.length}/{MAX_MESSAGE}
-              </p>
-            </>
-          )}
+      {needsMessage && (
+        <Field label="Your shoutout" error={errors.message}>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            maxLength={MAX_MESSAGE}
+            rows={3}
+            placeholder="e.g. Happy birthday Tolu! Table 7 loves you 🎉"
+            className={`${inputClass} resize-none`}
+          />
+          <p className="mt-1 text-right text-xs text-neutral-500">
+            {message.length}/{MAX_MESSAGE}
+          </p>
           {type === "screen_shoutout" && (
             <p className="mt-1 text-xs text-neutral-500">Staff approve shoutouts before they go on screen.</p>
           )}
@@ -353,7 +353,7 @@ function Chip({ selected, onClick, children }: { selected: boolean; onClick: () 
       type="button"
       aria-pressed={selected}
       onClick={onClick}
-      className={`h-14 rounded-xl border font-semibold transition active:scale-[0.98] ${
+      className={`min-h-14 rounded-xl border py-2 font-semibold transition active:scale-[0.98] ${
         selected ? "border-amber-400 bg-amber-400/10 text-amber-300" : "border-neutral-800 bg-neutral-900"
       }`}
     >

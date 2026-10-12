@@ -43,6 +43,7 @@ async function Venue({ params, searchParams }: PageProps<"/v/[venueSlug]">) {
           venueSlug={venue.slug}
           tableLabel={tableLabel}
           options={venue.options}
+          sprayTargets={venue.sprayTargets}
           requestTimeoutMinutes={venue.requestTimeoutMinutes}
         />
       )}
