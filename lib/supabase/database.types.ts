@@ -478,6 +478,9 @@ isOneToOne: false
             "accept_invite":
 { Args: { "p_token": string }; Returns: Json
                            },
+"admin_stats":
+{ Args: { "p_days"?: number,"p_from": string,"p_to": string }; Returns: Json
+                           },
 "auto_close_nights":
 { Args: Record<PropertyKey, never>; Returns: number
                            },

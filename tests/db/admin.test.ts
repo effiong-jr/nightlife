@@ -134,3 +134,54 @@ describe("admin library (end to end)", () => {
     expect((await getReviewQueue(admin)).flaggedEvents.some((e) => e.id === row!.id)).toBe(false);
   });
 });
+
+describe("admin_stats", () => {
+  it("adds up money taken, refunds, net and platform revenue exactly, within the period", async () => {
+    await withTx(async (db) => {
+      // Isolate from other data: only orders paid in this window count.
+      const v = await createStaffedVenue(db); // splits 40/25/25/10
+      const keep = await createOrder(db, { venueId: v.venueId, nightId: v.nightId, amount: "10000.00" });
+      const refundedOrder = await createOrder(db, { venueId: v.venueId, nightId: v.nightId, type: "song_request", amount: "3000.00" });
+      const old = await createOrder(db, { venueId: v.venueId, nightId: v.nightId, amount: "99999.00" });
+      for (const id of [keep, refundedOrder, old]) await recordPaid(db, id);
+      await db.query("update public.orders set paid_at = now() - interval '40 days' where id = $1", [old]);
+      await db.query("update public.orders set status = 'rejected' where id = $1", [refundedOrder]);
+      // Move everything else out of the window so the totals are just ours.
+      await db.query(
+        "update public.orders set paid_at = now() - interval '400 days' where paid_at > now() - interval '1 day' and id <> all($1)",
+        [[keep, refundedOrder]],
+      );
+
+      const { rows } = await db.query("select public.admin_stats(now() - interval '1 day', now() + interval '1 second', 3) as s");
+      const s = rows[0].s;
+      expect(s).toMatchObject({
+        gross: "13000.00",
+        orders: 2,
+        refunded: "3000.00",
+        refundCount: 1,
+        net: "10000.00",
+        // 10% of 10,000; the refunded order's platform share was reversed.
+        platformRevenue: "1000.00",
+        avgOrder: "6500.00",
+      });
+      expect(s.byType).toEqual([
+        { type: "spray", orders: 1, gross: "10000.00" },
+        { type: "song_request", orders: 1, gross: "3000.00" },
+      ]);
+      expect(s.daily).toHaveLength(3);
+      expect(s.daily.at(-1)).toMatchObject({ gross: "13000.00", orders: 2 });
+      expect(s.daily[0].gross).toBe("0.00");
+      const venue = s.venues.find((x: { id: string }) => x.id === v.venueId);
+      expect(venue).toMatchObject({ orders: 2, gross: "13000.00", refunded: "3000.00", net: "10000.00", platformRevenue: "1000.00" });
+    });
+  });
+
+  it("isn't callable by club staff", async () => {
+    await withTx(async (db) => {
+      const v = await createStaffedVenue(db);
+      await as(db, { userId: v.managerId }, () =>
+        expect(db.query("select public.admin_stats(now() - interval '1 day', now(), 7)")).rejects.toThrow(/permission denied/),
+      );
+    });
+  });
+});
