@@ -1,18 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 // Nudges staff to install the app (full screen, own icon; push alerts later).
-// Android/desktop Chrome: a real "Install" button. iPhone Safari: how to add it
+// Chrome/Android/desktop: a real "Install" button. iPhone Safari: how to add it
 // to the home screen. Hidden once installed or dismissed.
+//
+// Chrome fires `beforeinstallprompt` once per full page load, but staff move
+// between /dj, /mc and /club without reloading, and each page mounts its own
+// hint. So the event is caught once here, at module level, and shared.
 
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
 const DISMISSED_KEY = "nightlife:install-hint-dismissed";
 
+let deferredPrompt: InstallPromptEvent | null = null;
+const listeners = new Set<() => void>();
+const notify = () => listeners.forEach((listener) => listener());
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e as InstallPromptEvent;
+    notify();
+  });
+  window.addEventListener("appinstalled", () => {
+    deferredPrompt = null;
+    notify();
+  });
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function useInstallPrompt(): InstallPromptEvent | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => deferredPrompt,
+    () => null,
+  );
+}
+
+type Mode = "hidden" | "available";
+
 export function InstallHint() {
-  const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null);
-  const [showIosHelp, setShowIosHelp] = useState(false);
+  const prompt = useInstallPrompt();
+  // Decided after mount (reads the browser), never during render.
+  const [mode, setMode] = useState<Mode>("hidden");
+  const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
     const standalone =
@@ -24,28 +61,19 @@ export function InstallHint() {
     } catch {
       // Storage blocked: just show the hint.
     }
-    if (standalone || dismissed) return;
-
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setPrompt(e as InstallPromptEvent);
-    };
-    window.addEventListener("beforeinstallprompt", onPrompt);
-
-    // iOS Safari has no install prompt event.
-    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !/CriOS|FxiOS/.test(navigator.userAgent);
-    const timer = isIos ? setTimeout(() => setShowIosHelp(true), 0) : null;
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
-      if (timer) clearTimeout(timer);
-    };
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !/CriOS|FxiOS/.test(navigator.userAgent);
+    const timer = setTimeout(() => {
+      setIsIos(ios);
+      setMode(standalone || dismissed ? "hidden" : "available");
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
-  if (!prompt && !showIosHelp) return null;
+  // A real install prompt wins; iPhone Safari (which has none) gets instructions.
+  if (mode === "hidden" || (!prompt && !isIos)) return null;
 
   const dismiss = () => {
-    setPrompt(null);
-    setShowIosHelp(false);
+    setMode("hidden");
     try {
       localStorage.setItem(DISMISSED_KEY, "1");
     } catch {
@@ -66,7 +94,9 @@ export function InstallHint() {
           onClick={async () => {
             await prompt.prompt();
             await prompt.userChoice;
-            setPrompt(null);
+            // A prompt can only be used once.
+            deferredPrompt = null;
+            notify();
           }}
           className="rounded-lg bg-foreground px-3 py-1.5 font-medium text-background"
         >
