@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Nightlife app icon: a stylised naira sign on a gold coin. Drawn with
+       shapes (no fonts) so it renders the same everywhere. -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0a0a0a"/>
+  <circle cx="256" cy="256" r="176" fill="url(#gold)"/>
+  <g fill="#0a0a0a">
+    <path d="M176 136h44l72 150V136h44v240h-44l-72-150v150h-44z"/>
+    <rect x="140" y="212" width="232" height="24" rx="4"/>
+    <rect x="140" y="268" width="232" height="24" rx="4"/>
+  </g>
+</svg>

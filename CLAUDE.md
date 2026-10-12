@@ -130,6 +130,7 @@ DJs and MCs become staff at a venue in one of two ways; both end with an `active
 ## Design rules
 
 - **Dark mode by default** everywhere (clubs are dark).
+- **Staff surfaces are an installable PWA** (web app manifest, standalone display, app icon; opens at `/start`, which routes to the person's view). **No service worker / offline caching**: a dropped connection must show as offline, never as a stale queue. Push notifications for staff (MC big-spray alerts, new shoutouts, join requests) come later. **Attendee pages stay plain web**: never prompt attendees to install.
 - Attendee flow: big tap targets, minimal steps (scan → choose → amount → pay), works on weak signal. Keep attendee pages very light: no heavy libraries on those routes.
 - Club screen: read from across a room — huge type, few words, bold motion, stylised money (not exact naira note replicas).
 - Copy voice on screen and MC views: hype-man energy, Nigerian flavour, never cheesy or offensive ("Table 7 don scatter the place! ₦50k spray!"). Receipts and refund messages: plain and clear.

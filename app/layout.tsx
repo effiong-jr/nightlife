@@ -15,6 +15,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Nightlife",
   description: "Spray, shoutouts and song requests for Nigerian nightclubs.",
+  // iOS "Add to Home Screen" (staff): full screen, dark status bar.
+  appleWebApp: { capable: true, title: "Nightlife", statusBarStyle: "black" },
 };
 
 export const viewport: Viewport = {

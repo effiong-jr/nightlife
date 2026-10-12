@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/app/login/actions";
 import type { StaffContext } from "@/lib/server/staff";
+import { InstallHint } from "./install-hint";
 
 const VIEWS = [
   { href: "/dj", label: "DJ", role: "dj" },
@@ -48,6 +49,7 @@ export function StaffShell({
           </button>
         </form>
       </header>
+      <InstallHint />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-5">{children}</main>
     </div>
   );
