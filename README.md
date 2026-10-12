@@ -25,14 +25,21 @@ npm run dev                  # http://localhost:3000
 
 ## Local logins
 
-`npm run db:reset` seeds an active venue, **Test Lounge** (`/v/test-lounge`), with tonight open. All passwords are `password123`:
+`npm run db:reset` seeds an active venue, **Test Lounge** (`/v/test-lounge`), with tonight open and DJ Test + MC Test on their sets.
 
-| Email | Role |
-| --- | --- |
-| `admin@test.local` | platform admin |
-| `manager@test.local` | club manager |
-| `dj@test.local` | DJ on duty |
-| `mc@test.local` | MC on duty |
+Sign in at `/login` with the **phone number and code `123456`** (test numbers: no SMS is sent), or open "Use email and password instead" (password `password123`):
+
+| Phone | Email | Role |
+| --- | --- | --- |
+| `0800 000 0001` | `admin@test.local` | platform admin |
+| `0800 000 0002` | `manager@test.local` | club manager |
+| `0800 000 0003` | `dj@test.local` | DJ (on the decks) |
+| `0800 000 0004` | `mc@test.local` | MC (on the mic) |
+| `0800 000 0005` | `dj2@test.local` | second DJ (for changeovers) |
+| `0800 000 0099` | (none) | spare number: sign up through an invite link as a new DJ/MC |
+
+**Invites:** as the manager, `/club` → Staff → Create invite. Open the link in a private window and sign up with `0800 000 0099` / `123456`.
+Any other number gets a real code; locally it's printed in the `npm run dev` console as `[dev sms] OTP for …`.
 
 ## Payments locally (Bachs sandbox)
 

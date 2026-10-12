@@ -112,7 +112,7 @@ describe("channel authorisation", () => {
       expect(await canJoin(db, a.djId, "venue:not-a-uuid")).toBe(false);
       expect(await canJoin(db, a.djId, `screen:${a.venueId}`)).toBe(false);
 
-      await db.query("update public.venue_staff set status = 'revoked' where profile_id = $1", [a.djId]);
+      await db.query("update public.venue_staff set status = 'removed' where profile_id = $1", [a.djId]);
       expect(await canJoin(db, a.djId, `venue:${a.venueId}`)).toBe(false);
     });
   });

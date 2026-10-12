@@ -275,11 +275,11 @@ describe("order decisions", () => {
     });
   });
 
-  it("revoked staff lose access", async () => {
+  it("removed staff lose access", async () => {
     await withTx(async (db) => {
       const v = await createStaffedVenue(db);
       const song = await paidOrder(db, v, "song_request");
-      await db.query("update public.venue_staff set status = 'revoked' where profile_id = $1", [v.djId]);
+      await db.query("update public.venue_staff set status = 'removed' where profile_id = $1", [v.djId]);
       await as(db, { userId: v.djId }, async () => {
         expect(await count(db, "select 1 from public.orders where venue_id = $1", [v.venueId])).toBe(0);
         const res = await db.query("update public.orders set status = 'approved' where id = $1", [song]);

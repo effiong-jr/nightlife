@@ -106,10 +106,10 @@ DJs and MCs become staff at a venue in one of two ways; both end with an `active
 - `venue_pricing` — public, per order type: enabled, min_amount (the DJ controls song requests)
 - `venue_splits` — private, per order type: club/dj/mc/platform basis points (sum 10000)
 - `venue_target_splits` — private, per venue: target/club/platform basis points for targeted sprays (default 5000/4000/1000)
-- `profiles` — id (auth user), real name, stage name, role(s), phone (verified)
+- `profiles` — id (auth user), real_name (private), display_name (the stage name, public), role(s); phone lives on the auth user (verified by OTP)
 - `payout_accounts` — owner is a venue (club share; set by admin) or a profile (DJ/MC); provider, recipient_id, status. Provider-neutral.
 - `venue_staff` — venue_id, profile_id, role (`club_manager` | `dj` | `mc`), source (`invite` | `request` | `admin`), status (`active` | `removed` | `left`), joined_at, ended_at
-- `invites` — venue_id, role, token (unique), invitee_name, created_by, expires_at, cancelled_at, accepted_by, accepted_at
+- `invites` — venue_id, role, token_hash (unique; SHA-256 of the token, which only exists in the link), invitee_name, created_by, expires_at (7 days), cancelled_at, accepted_by, accepted_at
 - `staff_requests` — venue_id, profile_id, role, note, status (`pending` | `approved` | `declined` | `withdrawn`), decided_by, decided_at; unique pending per (venue_id, profile_id)
 - `venue_nights` — venue_id, date, opened_at, closed_at, settled_at
 - `venue_sets` — venue_id, venue_night_id, profile_id, role (`dj` | `mc`), starts_at, ends_at (null = still on), source (`lineup` | `clock_in`), confirmed_by; exclusion constraint: no overlapping sets of the same role per venue

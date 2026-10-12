@@ -25,14 +25,14 @@ export type Database = {
           Tables: {
             "invites": {
                   Row: {
-                    "accepted_at": string | null,"accepted_by": string | null,"created_at": string,"created_by": string | null,"expires_at": string,"id": string,"role": Database["public"]['Enums']["staff_role"],"token_hash": string,"venue_id": string
+                    "accepted_at": string | null,"accepted_by": string | null,"cancelled_at": string | null,"created_at": string,"created_by": string | null,"expires_at": string,"id": string,"invitee_name": string | null,"role": Database["public"]['Enums']["staff_role"],"token_hash": string,"venue_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "accepted_at"?: string | null,"accepted_by"?: string | null,"created_at"?: string,"created_by"?: string | null,"expires_at": string,"id"?: string,"role": Database["public"]['Enums']["staff_role"],"token_hash": string,"venue_id": string
+                    "accepted_at"?: string | null,"accepted_by"?: string | null,"cancelled_at"?: string | null,"created_at"?: string,"created_by"?: string | null,"expires_at"?: string,"id"?: string,"invitee_name"?: string | null,"role": Database["public"]['Enums']["staff_role"],"token_hash": string,"venue_id": string
                   }
                   Update: {
-                    "accepted_at"?: string | null,"accepted_by"?: string | null,"created_at"?: string,"created_by"?: string | null,"expires_at"?: string,"id"?: string,"role"?: Database["public"]['Enums']["staff_role"],"token_hash"?: string,"venue_id"?: string
+                    "accepted_at"?: string | null,"accepted_by"?: string | null,"cancelled_at"?: string | null,"created_at"?: string,"created_by"?: string | null,"expires_at"?: string,"id"?: string,"invitee_name"?: string | null,"role"?: Database["public"]['Enums']["staff_role"],"token_hash"?: string,"venue_id"?: string
                   }
                   Relationships: [
                     {
@@ -241,14 +241,14 @@ isOneToOne: false
                   ]
                 },"profiles": {
                   Row: {
-                    "created_at": string,"display_name": string,"id": string,"is_admin": boolean
+                    "created_at": string,"display_name": string,"id": string,"is_admin": boolean,"real_name": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"display_name"?: string,"id": string,"is_admin"?: boolean
+                    "created_at"?: string,"display_name"?: string,"id": string,"is_admin"?: boolean,"real_name"?: string
                   }
                   Update: {
-                    "created_at"?: string,"display_name"?: string,"id"?: string,"is_admin"?: boolean
+                    "created_at"?: string,"display_name"?: string,"id"?: string,"is_admin"?: boolean,"real_name"?: string
                   }
                   Relationships: [
                     
@@ -379,14 +379,14 @@ isOneToOne: false
                   ]
                 },"venue_staff": {
                   Row: {
-                    "created_at": string,"id": string,"invited_by": string | null,"profile_id": string,"role": Database["public"]['Enums']["staff_role"],"status": Database["public"]['Enums']["staff_status"],"venue_id": string
+                    "created_at": string,"ended_at": string | null,"id": string,"invited_by": string | null,"joined_at": string,"profile_id": string,"role": Database["public"]['Enums']["staff_role"],"source": Database["public"]['Enums']["staff_source"],"status": Database["public"]['Enums']["staff_status"],"venue_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"invited_by"?: string | null,"profile_id": string,"role": Database["public"]['Enums']["staff_role"],"status"?: Database["public"]['Enums']["staff_status"],"venue_id": string
+                    "created_at"?: string,"ended_at"?: string | null,"id"?: string,"invited_by"?: string | null,"joined_at"?: string,"profile_id": string,"role": Database["public"]['Enums']["staff_role"],"source"?: Database["public"]['Enums']["staff_source"],"status"?: Database["public"]['Enums']["staff_status"],"venue_id": string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"invited_by"?: string | null,"profile_id"?: string,"role"?: Database["public"]['Enums']["staff_role"],"status"?: Database["public"]['Enums']["staff_status"],"venue_id"?: string
+                    "created_at"?: string,"ended_at"?: string | null,"id"?: string,"invited_by"?: string | null,"joined_at"?: string,"profile_id"?: string,"role"?: Database["public"]['Enums']["staff_role"],"source"?: Database["public"]['Enums']["staff_source"],"status"?: Database["public"]['Enums']["staff_status"],"venue_id"?: string
                   }
                   Relationships: [
                     {
@@ -463,7 +463,10 @@ isOneToOne: true
             [_ in never]: never
           }
           Functions: {
-            "can_decide_order":
+            "accept_invite":
+{ Args: { "p_token": string }; Returns: Json
+                           },
+"can_decide_order":
 { Args: { "p_type": Database["public"]['Enums']["order_type"],"p_venue_id": string }; Returns: boolean
                            },
 "can_join_venue_topic":
@@ -482,6 +485,12 @@ isOneToOne: true
                            },
 "has_venue_role":
 { Args: { "p_roles": (Database["public"]['Enums']["staff_role"])[],"p_venue_id": string }; Returns: boolean
+                           },
+"invite_preview":
+{ Args: { "p_token": string }; Returns: Json
+                           },
+"invite_token_hash":
+{ Args: { "p_token": string }; Returns: string
                            },
 "is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -522,7 +531,7 @@ isOneToOne: true
                            }
           }
           Enums: {
-            "ledger_kind": "share"|"refund_reversal","ledger_party": "club"|"dj"|"mc"|"platform","order_status": "pending_payment"|"paid"|"approved"|"rejected"|"fulfilled"|"refunded"|"expired","order_type": "spray"|"screen_shoutout"|"mc_shoutout"|"song_request","payment_status": "pending"|"succeeded"|"failed","payout_account_status": "pending"|"active"|"restricted","payout_status": "pending"|"processing"|"paid"|"failed","refund_status": "pending"|"succeeded"|"failed","spray_target": "dj"|"mc"|"celebrant","staff_role": "club_manager"|"dj"|"mc","staff_status": "active"|"revoked","venue_status": "pending"|"active"|"suspended"
+            "ledger_kind": "share"|"refund_reversal","ledger_party": "club"|"dj"|"mc"|"platform","order_status": "pending_payment"|"paid"|"approved"|"rejected"|"fulfilled"|"refunded"|"expired","order_type": "spray"|"screen_shoutout"|"mc_shoutout"|"song_request","payment_status": "pending"|"succeeded"|"failed","payout_account_status": "pending"|"active"|"restricted","payout_status": "pending"|"processing"|"paid"|"failed","refund_status": "pending"|"succeeded"|"failed","spray_target": "dj"|"mc"|"celebrant","staff_role": "club_manager"|"dj"|"mc","staff_source": "invite"|"request"|"admin","staff_status": "active"|"removed"|"left","venue_status": "pending"|"active"|"suspended"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -642,7 +651,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "ledger_kind": ["share", "refund_reversal"],"ledger_party": ["club", "dj", "mc", "platform"],"order_status": ["pending_payment", "paid", "approved", "rejected", "fulfilled", "refunded", "expired"],"order_type": ["spray", "screen_shoutout", "mc_shoutout", "song_request"],"payment_status": ["pending", "succeeded", "failed"],"payout_account_status": ["pending", "active", "restricted"],"payout_status": ["pending", "processing", "paid", "failed"],"refund_status": ["pending", "succeeded", "failed"],"spray_target": ["dj", "mc", "celebrant"],"staff_role": ["club_manager", "dj", "mc"],"staff_status": ["active", "revoked"],"venue_status": ["pending", "active", "suspended"]
+            "ledger_kind": ["share", "refund_reversal"],"ledger_party": ["club", "dj", "mc", "platform"],"order_status": ["pending_payment", "paid", "approved", "rejected", "fulfilled", "refunded", "expired"],"order_type": ["spray", "screen_shoutout", "mc_shoutout", "song_request"],"payment_status": ["pending", "succeeded", "failed"],"payout_account_status": ["pending", "active", "restricted"],"payout_status": ["pending", "processing", "paid", "failed"],"refund_status": ["pending", "succeeded", "failed"],"spray_target": ["dj", "mc", "celebrant"],"staff_role": ["club_manager", "dj", "mc"],"staff_source": ["invite", "request", "admin"],"staff_status": ["active", "removed", "left"],"venue_status": ["pending", "active", "suspended"]
           }
         }
 } as const

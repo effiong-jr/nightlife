@@ -28,7 +28,8 @@ export async function proxy(request: NextRequest) {
   // in the pages (and enforced by RLS); here we only bounce signed-out visitors.
   const { data } = await supabase.auth.getClaims();
   const { pathname, search } = request.nextUrl;
-  if (!data?.claims && pathname !== "/login") {
+  // /login and invite links work signed out (the invite page signs people in).
+  if (!data?.claims && pathname !== "/login" && !pathname.startsWith("/join/")) {
     const login = new URL("/login", request.url);
     login.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(login);
@@ -38,5 +39,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dj/:path*", "/mc/:path*", "/club/:path*", "/admin/:path*", "/login"],
+  matcher: ["/dj/:path*", "/mc/:path*", "/club/:path*", "/admin/:path*", "/login", "/join/:path*"],
 };

@@ -287,7 +287,7 @@ describe("targeted sprays", () => {
       await expect(attendeeSpray(other.djId, "dj")).rejects.toThrow(/not an active dj/); // another venue's DJ
       await expect(attendeeSpray(v.mcId, "dj")).rejects.toThrow(/not an active dj/); // wrong role
       await expect(attendeeSpray(v.managerId, "mc")).rejects.toThrow(/not an active mc/);
-      await db.query("update public.venue_staff set status = 'revoked' where profile_id = $1", [v.djId]);
+      await db.query("update public.venue_staff set status = 'removed' where profile_id = $1", [v.djId]);
       await expect(attendeeSpray(v.djId, "dj")).rejects.toThrow(/not an active dj/);
     });
   });

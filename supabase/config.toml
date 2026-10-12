@@ -257,17 +257,24 @@ otp_expiry = 3600
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
-enable_signup = false
+# Staff (DJs, MCs, managers) sign up and sign in with phone OTP.
+enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
 enable_confirmations = false
 # Template for sending OTP to users
-template = "Your code is {{ .Code }}"
+template = "Your Nightlife code is {{ .Code }}. Don't share it with anyone."
 # Controls the minimum amount of time that must pass before sending another sms otp.
 max_frequency = "5s"
 
 # Use pre-defined map of phone number to OTP for testing.
-# [auth.sms.test_otp]
-# 4152127777 = "123456"
+# Local test numbers (see supabase/seed.sql): no SMS is sent, the code is fixed.
+[auth.sms.test_otp]
+2348000000001 = "123456"
+2348000000002 = "123456"
+2348000000003 = "123456"
+2348000000004 = "123456"
+2348000000005 = "123456"
+2348000000099 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -286,13 +293,25 @@ max_frequency = "5s"
 # enabled = true
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
+# OTP SMS goes through our hook (app/api/auth/send-sms), which sends via Termii
+# in production and logs the code to the dev server console locally.
+# LOCAL DEV SECRET ONLY: production uses its own secret, set in the Supabase
+# dashboard and as SEND_SMS_HOOK_SECRET in Vercel.
+[auth.hook.send_sms]
+enabled = true
+uri = "http://host.docker.internal:3000/api/auth/send-sms"
+secrets = "v1,whsec_WRZV0SDjEagT7mUatphvM+McvqiyNfKYoP5PwX+GWWg="
+
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
+# Enabled only because the CLI turns phone sign-in on when a provider is
+# enabled. The Send SMS hook above replaces the provider, so these placeholder
+# values are never used and nothing is sent through Twilio.
 [auth.sms.twilio]
-enabled = false
-account_sid = ""
-message_service_sid = ""
+enabled = true
+account_sid = "placeholder-unused-send-sms-hook-delivers"
+message_service_sid = "placeholder-unused"
 # DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
-auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+auth_token = "placeholder-unused"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]

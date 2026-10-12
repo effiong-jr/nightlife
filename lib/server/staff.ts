@@ -67,3 +67,21 @@ export async function getStaffContext(
 
   return { userId, displayName: profile?.display_name ?? "", venue, venues };
 }
+
+// Where a staff member lands after signing in: their most senior view.
+export async function staffHomePath(): Promise<string> {
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = claims?.claims.sub;
+  if (!userId) return "/login";
+  const { data } = await supabase
+    .from("venue_staff")
+    .select("role")
+    .eq("profile_id", userId)
+    .eq("status", "active");
+  const roles = new Set((data ?? []).map((r) => r.role));
+  if (roles.has("club_manager")) return "/club";
+  if (roles.has("dj")) return "/dj";
+  if (roles.has("mc")) return "/mc";
+  return "/club"; // shows "No access" with guidance
+}

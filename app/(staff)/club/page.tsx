@@ -2,9 +2,10 @@ import { Suspense } from "react";
 import { getStaffContext } from "@/lib/server/staff";
 import { NoAccess, StaffLoading, StaffShell } from "../_components/staff-shell";
 import { ClubLive } from "./club-live";
+import { StaffPanel } from "./staff-panel";
 
-// Manager dashboard. Step 5 covers tonight's live view and screen approvals;
-// prices, splits, earnings and invites come with the admin work (step 7).
+// Manager dashboard: tonight (lineup, approvals, takings) and staff (invites,
+// removal). Prices, splits and earnings come later.
 export default function ClubPage({ searchParams }: PageProps<"/club">) {
   return (
     <Suspense fallback={<StaffLoading />}>
@@ -20,7 +21,10 @@ async function Club({ searchParams }: Pick<PageProps<"/club">, "searchParams">) 
 
   return (
     <StaffShell ctx={ctx} current="/club">
-      <ClubLive venueId={ctx.venue.id} venueSlug={ctx.venue.slug} />
+      <div className="flex flex-col gap-10">
+        <ClubLive venueId={ctx.venue.id} venueSlug={ctx.venue.slug} />
+        <StaffPanel venueId={ctx.venue.id} venueName={ctx.venue.name} myUserId={ctx.userId} />
+      </div>
     </StaffShell>
   );
 }

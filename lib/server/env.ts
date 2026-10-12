@@ -25,6 +25,15 @@ const bachsSchema = z.object({
     .transform((value) => value || undefined),
 });
 
+const smsSchema = z.object({
+  // Signs Supabase's Send SMS hook requests ("v1,whsec_...").
+  SEND_SMS_HOOK_SECRET: z.string().startsWith("v1,whsec_"),
+  // Termii is optional in development (codes are logged instead).
+  TERMII_API_KEY: z.string().optional().transform((v) => v || undefined),
+  TERMII_SENDER_ID: z.string().optional().transform((v) => v || undefined),
+  TERMII_BASE_URL: z.url().default("https://v3.api.termii.com"),
+});
+
 const appSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.url(),
   CRON_SECRET: z.string().min(32, "CRON_SECRET must be at least 32 characters"),
@@ -47,6 +56,10 @@ export function supabaseServerEnv(source: Source = process.env) {
 
 export function bachsEnv(source: Source = process.env) {
   return parse(bachsSchema, "Bachs", source);
+}
+
+export function smsEnv(source: Source = process.env) {
+  return parse(smsSchema, "SMS", source);
 }
 
 export function appEnv(source: Source = process.env) {

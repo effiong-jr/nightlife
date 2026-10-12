@@ -1,11 +1,13 @@
 -- Local dev seed data. Runs after migrations on `npm run db:reset`.
--- Every login below uses the password: password123
+-- Sign in with phone + code 123456 (test OTPs in supabase/config.toml, no SMS
+-- sent), or with email + password: password123
 --
---   admin@test.local     platform admin
---   manager@test.local   club manager, Test Lounge
---   dj@test.local        DJ, Test Lounge (on the decks now)
---   mc@test.local        MC, Test Lounge (on the mic now)
---   dj2@test.local       second DJ, Test Lounge (staff, not on a set: use for changeovers)
+--   0800 000 0001  admin@test.local     platform admin
+--   0800 000 0002  manager@test.local   club manager, Test Lounge
+--   0800 000 0003  dj@test.local        DJ, Test Lounge (on the decks now)
+--   0800 000 0004  mc@test.local        MC, Test Lounge (on the mic now)
+--   0800 000 0005  dj2@test.local       second DJ, Test Lounge (not on a set: use for changeovers)
+--   0800 000 0099  (no account)         sign up with this to test accepting an invite as a new DJ/MC
 --
 -- Attendee page: http://localhost:3000/v/test-lounge
 -- Split percentages are placeholders until the commercial terms are agreed.
@@ -13,24 +15,27 @@
 do $$
 declare
   v_users constant jsonb := '[
-    {"id": "00000000-0000-4000-8000-000000000001", "email": "admin@test.local",   "name": "Test Admin"},
-    {"id": "00000000-0000-4000-8000-000000000002", "email": "manager@test.local", "name": "Test Manager"},
-    {"id": "00000000-0000-4000-8000-000000000003", "email": "dj@test.local",      "name": "DJ Test"},
-    {"id": "00000000-0000-4000-8000-000000000004", "email": "mc@test.local",      "name": "MC Test"},
-    {"id": "00000000-0000-4000-8000-000000000005", "email": "dj2@test.local",     "name": "DJ Second"}
+    {"id": "00000000-0000-4000-8000-000000000001", "email": "admin@test.local",   "phone": "2348000000001", "name": "Test Admin",   "real": "Ada Admin"},
+    {"id": "00000000-0000-4000-8000-000000000002", "email": "manager@test.local", "phone": "2348000000002", "name": "Test Manager", "real": "Tunde Manager"},
+    {"id": "00000000-0000-4000-8000-000000000003", "email": "dj@test.local",      "phone": "2348000000003", "name": "DJ Test",      "real": "Kola Adeyemi"},
+    {"id": "00000000-0000-4000-8000-000000000004", "email": "mc@test.local",      "phone": "2348000000004", "name": "MC Test",      "real": "Chidi Okafor"},
+    {"id": "00000000-0000-4000-8000-000000000005", "email": "dj2@test.local",     "phone": "2348000000005", "name": "DJ Second",    "real": "Bisi Ojo"}
   ]';
   v_user jsonb;
 begin
   for v_user in select * from jsonb_array_elements(v_users) loop
     insert into auth.users (
       instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+      phone, phone_confirmed_at,
       raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
-      confirmation_token, recovery_token, email_change_token_new, email_change
+      confirmation_token, recovery_token, email_change_token_new, email_change,
+      phone_change, phone_change_token
     ) values (
       '00000000-0000-0000-0000-000000000000', (v_user ->> 'id')::uuid, 'authenticated', 'authenticated',
       v_user ->> 'email', extensions.crypt('password123', extensions.gen_salt('bf')), now(),
-      '{"provider": "email", "providers": ["email"]}', jsonb_build_object('display_name', v_user ->> 'name'),
-      now(), now(), '', '', '', ''
+      v_user ->> 'phone', now(),
+      '{"provider": "email", "providers": ["email", "phone"]}', jsonb_build_object('display_name', v_user ->> 'name'),
+      now(), now(), '', '', '', '', '', ''
     );
 
     insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
@@ -38,7 +43,13 @@ begin
       gen_random_uuid(), (v_user ->> 'id')::uuid, v_user ->> 'id', 'email',
       jsonb_build_object('sub', v_user ->> 'id', 'email', v_user ->> 'email', 'email_verified', true),
       now(), now(), now()
+    ), (
+      gen_random_uuid(), (v_user ->> 'id')::uuid, v_user ->> 'id', 'phone',
+      jsonb_build_object('sub', v_user ->> 'id', 'phone', v_user ->> 'phone', 'phone_verified', true),
+      now(), now(), now()
     );
+
+    update public.profiles set real_name = v_user ->> 'real' where id = (v_user ->> 'id')::uuid;
   end loop;
 end;
 $$;
