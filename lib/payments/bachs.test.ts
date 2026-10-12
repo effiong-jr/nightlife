@@ -77,6 +77,16 @@ describe("verifySignature", () => {
     );
   });
 
+  it("accepts a signature from any of several endpoint secrets", () => {
+    const both = `whsec_account_events, ${SECRET}`;
+    expect(() =>
+      verifySignature(body, headers({ "x-bachs-signature-v2": signPayload(body, SECRET, NOW_S) }), both, NOW_MS),
+    ).not.toThrow();
+    expect(() =>
+      verifySignature(body, headers({ "x-bachs-signature-v2": signPayload(body, "whsec_other", NOW_S) }), both, NOW_MS),
+    ).toThrow(WebhookSignatureError);
+  });
+
   it("accepts the header names without the X- prefix too", () => {
     expect(() =>
       verifySignature(body, headers({ "bachs-signature-v2": signPayload(body, SECRET, NOW_S) }), SECRET, NOW_MS),

@@ -32,6 +32,8 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 export type BachsConfig = {
   secretKey: string;
+  // One secret per registered endpoint (account events and connected-account
+  // events are separate endpoints); comma-separated when there are several.
   webhookSecret?: string;
   fetch?: typeof fetch;
   now?: () => number; // ms; injectable for tests
@@ -386,12 +388,17 @@ export function verifySignature(rawBody: string, headers: Headers, secret: strin
     throw new WebhookSignatureError("Signature timestamp outside tolerance");
   }
 
-  const expected = Buffer.from(
-    createHmac("sha256", secret).update(`${timestamp}.${rawBody}`, "utf8").digest("hex"),
-  );
-  const valid = signatures.some((sig) => {
-    const given = Buffer.from(sig);
-    return given.length === expected.length && timingSafeEqual(given, expected);
+  // Any of our endpoint secrets may have signed it.
+  const secrets = secret
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const valid = secrets.some((key) => {
+    const expected = Buffer.from(createHmac("sha256", key).update(`${timestamp}.${rawBody}`, "utf8").digest("hex"));
+    return signatures.some((sig) => {
+      const given = Buffer.from(sig);
+      return given.length === expected.length && timingSafeEqual(given, expected);
+    });
   });
   if (!valid) throw new WebhookSignatureError("Signature mismatch");
 }
