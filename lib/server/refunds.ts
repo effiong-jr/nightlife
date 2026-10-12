@@ -14,6 +14,7 @@ const REASONS: Record<string, string> = {
   rejected_by_staff: "Request declined by the venue",
   request_timeout: "Song request not played in time",
   late_payment: "Payment arrived after the order expired",
+  night_closed: "The night ended before this could happen",
   admin: "Refunded by Nightlife support",
 };
 

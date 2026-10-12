@@ -466,6 +466,12 @@ isOneToOne: true
             "accept_invite":
 { Args: { "p_token": string }; Returns: Json
                            },
+"auto_close_nights":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
+"business_date":
+{ Args: { "p_at"?: string }; Returns: string
+                           },
 "can_decide_order":
 { Args: { "p_type": Database["public"]['Enums']["order_type"],"p_venue_id": string }; Returns: boolean
                            },
@@ -479,6 +485,9 @@ isOneToOne: true
 { Args: { "p_limit"?: number,"p_order_id"?: string }; Returns: {
               "amount": string,"attempts": number,"charge_id": string,"currency": string,"id": string,"idempotency_key": string,"order_id": string,"provider": string,"reason": string
             }[]
+                           },
+"close_night":
+{ Args: { "p_night_id": string }; Returns: number
                            },
 "compute_split":
 { Args: { "p_amount": number,"p_club_bps": number,"p_dj_bps": number,"p_has_dj": boolean,"p_has_mc": boolean,"p_mc_bps": number,"p_platform_bps": number }; Returns: {
@@ -516,6 +525,9 @@ isOneToOne: true
                            },
 "night_unassigned_total":
 { Args: { "p_venue_night_id": string }; Returns: number
+                           },
+"open_night":
+{ Args: { "p_venue_id": string }; Returns: string
                            },
 "record_paid_order":
 { Args: { "p_amount": number,"p_checkout_id": string,"p_collection_id": string,"p_currency": string,"p_event_id": string,"p_event_type": string,"p_order_id": string,"p_payload": Json,"p_provider": string }; Returns: string

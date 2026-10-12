@@ -121,6 +121,8 @@ function rejectedTitle(order: OrderReceipt): string {
       return "Not played in time";
     case "late_payment":
       return "Payment arrived too late";
+    case "night_closed":
+      return "The night has ended";
     default:
       return "Not accepted";
   }

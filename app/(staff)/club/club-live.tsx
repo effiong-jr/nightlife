@@ -4,6 +4,7 @@ import { formatNaira, fromMinorUnits, toMinorUnits } from "@/lib/money";
 import { type StaffOrder, useNow, useVenueOrders } from "@/lib/realtime/use-venue-orders";
 import { ActionButton, Empty, ErrorBar, LiveBadge, SectionTitle, Who, minutesAgo } from "../_components/order-ui";
 import { Lineup } from "./lineup";
+import { CloseNightButton, OpenNightButton } from "./night-controls";
 
 const TYPE_LABELS: Record<StaffOrder["type"], string> = {
   spray: "Sprays",
@@ -13,7 +14,7 @@ const TYPE_LABELS: Record<StaffOrder["type"], string> = {
 };
 
 export function ClubLive({ venueId, venueSlug }: { venueId: string; venueSlug: string }) {
-  const { orders, nightId, loaded, live, error, setStatus } = useVenueOrders(venueId);
+  const { orders, nightId, loaded, live, error, setStatus, refetch } = useVenueOrders(venueId);
   const now = useNow();
 
   const toApprove = orders.filter((o) => o.type === "screen_shoutout" && o.status === "paid");
@@ -40,7 +41,7 @@ export function ClubLive({ venueId, venueSlug }: { venueId: string; venueSlug: s
       <ErrorBar message={error} />
 
       {loaded && !nightId ? (
-        <Empty>No night is open. Opening and closing nights comes with the next part of the dashboard.</Empty>
+        <OpenNightButton venueId={venueId} onChange={() => void refetch()} />
       ) : (
         <>
           {nightId && <Lineup venueId={venueId} nightId={nightId} />}
@@ -89,6 +90,8 @@ export function ClubLive({ venueId, venueSlug }: { venueId: string; venueSlug: s
               </dl>
             </div>
           </section>
+
+          {nightId && <CloseNightButton nightId={nightId} onChange={() => void refetch()} />}
         </>
       )}
     </div>
