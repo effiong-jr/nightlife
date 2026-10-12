@@ -1,6 +1,7 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import type { Database } from "./database.types";
 import { supabasePublicEnv } from "./env";
 
 // Server Component / Route Handler / Server Action client: acts as the signed-in
@@ -9,7 +10,7 @@ export async function createClient() {
   const { url, publishableKey } = supabasePublicEnv();
   const cookieStore = await cookies();
 
-  return createServerClient(url, publishableKey, {
+  return createServerClient<Database>(url, publishableKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();

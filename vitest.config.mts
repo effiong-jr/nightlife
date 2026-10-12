@@ -13,8 +13,25 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["**/*.test.{ts,tsx}"],
-    exclude: ["node_modules/**", ".next/**", "supabase/**"],
     setupFiles: ["./test/setup.ts"],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          include: ["**/*.test.{ts,tsx}"],
+          exclude: ["node_modules/**", ".next/**", "supabase/**", "tests/db/**"],
+        },
+      },
+      {
+        // Needs local Supabase running (`npm run db:start`).
+        extends: true,
+        test: {
+          name: "db",
+          include: ["tests/db/**/*.test.ts"],
+          testTimeout: 30_000,
+        },
+      },
+    ],
   },
 });
