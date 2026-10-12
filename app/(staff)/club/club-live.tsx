@@ -1,26 +1,16 @@
 "use client";
 
-import { formatNaira, fromMinorUnits, toMinorUnits } from "@/lib/money";
-import { type StaffOrder, useNow, useVenueOrders } from "@/lib/realtime/use-venue-orders";
+import { useNow, useVenueOrders } from "@/lib/realtime/use-venue-orders";
 import { ActionButton, Empty, ErrorBar, LiveBadge, SectionTitle, Who, minutesAgo } from "../_components/order-ui";
 import { Lineup } from "./lineup";
 import { CloseNightButton, OpenNightButton } from "./night-controls";
-
-const TYPE_LABELS: Record<StaffOrder["type"], string> = {
-  spray: "Sprays",
-  screen_shoutout: "Screen shoutouts",
-  mc_shoutout: "MC shoutouts",
-  song_request: "Song requests",
-};
+import { TonightStats } from "./tonight-stats";
 
 export function ClubLive({ venueId, venueSlug }: { venueId: string; venueSlug: string }) {
   const { orders, nightId, loaded, live, error, setStatus, refetch } = useVenueOrders(venueId);
   const now = useNow();
 
   const toApprove = orders.filter((o) => o.type === "screen_shoutout" && o.status === "paid");
-  // Money that's staying: excludes rejected (being refunded) and refunded orders.
-  const kept = orders.filter((o) => o.status !== "rejected" && o.status !== "refunded");
-  const total = fromMinorUnits(kept.reduce((sum, o) => sum + toMinorUnits(o.amount), 0n));
 
   return (
     <div className="flex flex-col gap-8">
@@ -28,6 +18,9 @@ export function ClubLive({ venueId, venueSlug }: { venueId: string; venueSlug: s
         <h1 className="text-2xl font-bold">Tonight</h1>
         <div className="flex items-center gap-4">
           <LiveBadge live={live} />
+          <a href="/club/history" className="rounded-lg border border-border px-3 py-2 text-sm font-medium">
+            Past nights
+          </a>
           <a
             href={`/s/${venueSlug}`}
             target="_blank"
@@ -73,23 +66,9 @@ export function ClubLive({ venueId, venueSlug }: { venueId: string; venueSlug: s
             )}
           </section>
 
-          <section>
-            <SectionTitle>Takings so far</SectionTitle>
-            <div className="rounded-2xl border border-border p-4">
-              <p className="text-3xl font-bold">{formatNaira(total)}</p>
-              <p className="text-sm text-muted-foreground">
-                {kept.length} paid {kept.length === 1 ? "order" : "orders"} · before splits and refunds
-              </p>
-              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                {(Object.keys(TYPE_LABELS) as StaffOrder["type"][]).map((type) => (
-                  <div key={type} className="rounded-xl bg-muted p-3">
-                    <dt className="text-muted-foreground">{TYPE_LABELS[type]}</dt>
-                    <dd className="text-lg font-semibold">{kept.filter((o) => o.type === type).length}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          </section>
+          {nightId && (
+            <TonightStats nightId={nightId} refreshKey={orders.map((o) => `${o.id}:${o.status}`).join(",")} />
+          )}
 
           {nightId && <CloseNightButton nightId={nightId} onChange={() => void refetch()} />}
         </>

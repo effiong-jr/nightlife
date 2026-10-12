@@ -3,7 +3,9 @@ import { getPaymentProvider } from "@/lib/payments";
 import { describeRequirement, getProfilePayoutAccount, syncPayoutAccount } from "@/lib/server/payout-accounts";
 import { getStaffContext } from "@/lib/server/staff";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { NoAccess, StaffLoading, StaffShell } from "../_components/staff-shell";
+import { type Earnings, EarningsSection } from "./earnings";
 import { PayoutSetupForm } from "./setup-form";
 
 // "Get paid": a DJ/MC sets up where their earnings go. Verification (ID, NIN,
@@ -36,6 +38,7 @@ async function Payouts({ searchParams }: Pick<PageProps<"/payouts">, "searchPara
   }
 
   const view = account?.view;
+  const { data: earnings } = await (await createClient()).rpc("my_earnings", { p_limit: 30 });
   return (
     <StaffShell ctx={ctx} current="/payouts">
       <div className="flex max-w-xl flex-col gap-6">
@@ -83,6 +86,8 @@ async function Payouts({ searchParams }: Pick<PageProps<"/payouts">, "searchPara
             <PayoutSetupForm hasAccount={Boolean(view)} />
           </div>
         )}
+
+        {earnings && <EarningsSection earnings={earnings as unknown as Earnings} />}
       </div>
     </StaffShell>
   );

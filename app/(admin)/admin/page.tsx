@@ -5,7 +5,8 @@ import { getReviewQueue, requireAdmin } from "@/lib/server/admin";
 import { getAdminStats, parsePeriod, PERIODS, percentOf } from "@/lib/server/admin-stats";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AdminShell, NotAdmin, StatusPill } from "./_components/admin-shell";
-import { DailyChart } from "./_components/daily-chart";
+import { BarChart } from "@/components/charts/bar-chart";
+import { dayLabel } from "@/lib/dates";
 import { ActionForm, Field } from "./_components/forms";
 import { createVenueAction } from "./actions";
 
@@ -83,7 +84,7 @@ async function Admin({ searchParams }: Pick<PageProps<"/admin">, "searchParams">
         <section className="grid gap-6 md:grid-cols-[2fr_1fr]">
           <div className="rounded-2xl border border-border p-4">
             <h2 className="mb-3 text-sm font-semibold">Money taken per day</h2>
-            <DailyChart days={stats.daily} />
+            <BarChart points={stats.daily.map((d) => ({ id: d.day, label: dayLabel(d.day), amount: d.gross, count: d.orders }))} />
           </div>
           <div className="rounded-2xl border border-border p-4">
             <h2 className="mb-3 text-sm font-semibold">By type, {periodLabel}</h2>

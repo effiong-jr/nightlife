@@ -509,6 +509,12 @@ isOneToOne: false
 "close_night":
 { Args: { "p_night_id": string }; Returns: number
                            },
+"club_history":
+{ Args: { "p_limit"?: number,"p_venue_id": string }; Returns: Json
+                           },
+"club_night_summary":
+{ Args: { "p_night_id": string }; Returns: Json
+                           },
 "compute_split":
 { Args: { "p_amount": number,"p_club_bps": number,"p_dj_bps": number,"p_has_dj": boolean,"p_has_mc": boolean,"p_mc_bps": number,"p_platform_bps": number }; Returns: {
               "amount": number,"party": Database["public"]['Enums']["ledger_party"]
@@ -546,6 +552,9 @@ isOneToOne: false
                            },
 "kick_refund_worker":
 { Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"my_earnings":
+{ Args: { "p_limit"?: number }; Returns: Json
                            },
 "night_settlement_amounts":
 { Args: { "p_venue_night_id": string }; Returns: {
