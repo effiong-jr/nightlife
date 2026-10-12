@@ -25,14 +25,54 @@ Web app only (no native app, no Bluetooth/offline mode). Multi-club from day one
 | Club | Big-screen page on a TV/laptop + manager dashboard (prices, splits, approvals, earnings, invite links) | `app/(screen)/s/[venueSlug]`, `app/(staff)/club` |
 | Admin (us) | Onboard venues, DJs, MCs; refunds; disputes | `app/(admin)/admin` |
 
-DJs and MCs have one account each and are assigned to a venue per night (`venue_nights`). Clubs invite DJs/MCs via invite links; clubs themselves are admin-approved.
+DJs and MCs have one account each and work at many venues. A night can have **several DJ sets** (and MC changes), so money is attributed to whoever was on the active set when the payment was confirmed (see Lineups below). Clubs themselves are admin-approved.
+
+## Staff onboarding and venue discovery
+
+DJs and MCs become staff at a venue in one of two ways; both end with an `active` row in `venue_staff`.
+
+**1. Club invites (no approval needed)**
+- Manager → Staff → Invite → picks role (`dj` | `mc`), optional name → gets a link (shareable on WhatsApp) and a QR code.
+- Invites are single-use, expire after 7 days, have a fixed role, and can be cancelled before use.
+- New user: sign up (phone OTP), real name, stage name, bank account → Bachs recipient account created; payouts go live once the bank account resolves. Existing user: log in → Accept.
+- Phone OTP is sent by Termii through Supabase's Send SMS auth hook. Locally, use Supabase test OTPs (no SMS sent).
+- Accepting creates `venue_staff` with status `active`.
+
+**2. DJ/MC requests to join (club approves)**
+- DJ dashboard → **Find venues**: a directory of venues that are `active` AND `listed`, searchable by name, filterable by city and area.
+- Venue card/profile shows public info only: name, city/area, nights it runs, music style, whether it's accepting DJ/MC requests. Never earnings, staff details or attendee data.
+- **Request to join**: choose role + optional note. Only allowed when the venue has `accepting_staff_requests = true`. One pending request per profile per venue (rate-limit).
+- Shortcuts: enter the venue's `staff_join_code`, or scan the staff QR at the DJ booth → creates the same request for that venue (works even if the venue is unlisted).
+- Manager approves or declines in the club dashboard (in-app notification for the MVP; WhatsApp/SMS later). Approve → `venue_staff` `active`.
+- DJ/MC sees requests under **My venues** as pending / approved / declined.
+
+**Venue listing controls (club manager):** `listed` on/off (hidden venues use only invites, join code and booth QR) and `accepting_staff_requests` on/off.
+
+**Other rules**
+- Club can remove a DJ/MC at any time; earnings already owed are still paid.
+- DJ/MC can leave a venue.
+- Only the DJ/MC can view or change their own bank details, with a phone OTP check. Clubs never see them.
+- Admin can suspend any profile across all venues.
+- Club managers sign in with phone OTP and are created by admin (`venue_staff.source = 'admin'`) for the pilot.
+- The club's payout bank account belongs to the venue (not to a manager). Admin sets and verifies it; managers can't change it without admin approval.
+
+## Lineups (who gets paid tonight)
+
+- Being staff at a venue doesn't mean earning every night. Before each night the manager sets the lineup as **sets**: DJ and/or MC with start and end times.
+- Backup: a DJ/MC scans the booth QR to "clock in"; the manager confirms, which opens a set.
+- **No overlapping sets of the same role** at a venue: at most one DJ set and one MC set at any moment, enforced by a database exclusion constraint on `venue_sets`. Back-to-back (end = next start) is fine.
+- When a payment is confirmed (webhook), the order is attributed to the DJ and MC on the **active set at that moment** (`orders.dj_set_id` / `mc_set_id`), and their ledger shares go to them. If no DJ or MC set is active, that share goes to the club (configurable later). Exceptions:
+  - **Song requests:** the DJ share is written **unassigned** (`profile_id` null) at payment and assigned to the DJ who marks the request played. Accepted-but-unplayed requests carry over to the next DJ's queue at changeover. Unplayed by the timeout → refunded as before. Only a DJ can mark a song played.
+  - **MC shoutouts:** same rule for the MC share: unassigned at payment, assigned to the MC who marks it read. Only an MC can mark it read.
+  - **Targeted sprays** (at a named DJ or MC) use a separate per-venue split, default **target 50 / club 40 / platform 10**, and the target's share goes to that person regardless of the current set. Untargeted sprays use the normal spray split. A spray can only target a DJ or MC who is active staff at the venue.
 
 ## Stack
 
 - Next.js (App Router) + TypeScript (strict) + Tailwind CSS + shadcn/ui
-- Framer Motion (or Lottie) for spray/shoutout animations
-- Supabase: Postgres, Realtime (one channel per venue), Auth (staff only), Row Level Security
-- Payments: Bachs (`@bachs/sdk`, Node). Docs: https://docs.bachs.io
+- CSS animations for spray/shoutout motion (Framer Motion or Lottie only if CSS isn't enough; never on attendee routes)
+- Supabase: Postgres, Realtime (one channel per venue), Auth (staff only, phone OTP), Row Level Security
+- Payments: Bachs REST API called with `fetch` from `lib/payments/bachs.ts` (the docs name no official Node SDK). Docs: https://docs.bachs.io (index: https://docs.bachs.io/llms.txt)
+- SMS: Termii via Supabase's Send SMS auth hook
 - Background jobs: Supabase cron to start (refund timeouts, nightly settlement)
 - Hosting: Vercel; Supabase in an EU region; Cloudflare for DNS
 - Monitoring: Sentry; analytics: PostHog
@@ -47,9 +87,12 @@ DJs and MCs have one account each and are assigned to a venue per night (`venue_
 5. **Never hold customer balances / no wallets.** Every payment flows through Bachs; we only record shares.
 6. **Settle after closing, not per payment.** A nightly job transfers each party's share to their Bachs connected (recipient) account in one transfer per party per night. Refunds are taken from the ledger before settlement.
 7. **Every external payment call uses an `Idempotency-Key`** and stores the returned IDs.
-8. **All Bachs calls go through `lib/payments/`** (a small provider interface) so we can switch to Paystack/Flutterwave later. No Bachs SDK imports outside that folder.
+8. **All Bachs calls go through `lib/payments/`** (a small provider interface) so we can switch to Paystack/Flutterwave later. No Bachs API calls or Bachs-specific types outside that folder.
 9. **Secrets live in `.env.local`** and server code only. Never expose secret keys to the browser. Build against the Bachs sandbox (`sk_sandbox_` keys) until told otherwise.
 10. Money code always ships with tests.
+11. **Splits are computed in whole kobo** in Postgres (`compute_split`): each party gets its basis-point share rounded down; leftover kobo goes to the platform; a DJ/MC share with nobody on the active set goes to the club.
+12. **Unassigned shares are never paid out.** A DJ/MC share with `profile_id` null (song request not yet played, MC shoutout not yet read) is excluded from settlement until it's assigned, and is reversed if the order is refunded.
+13. **The customer pays Bachs's processing fee** (`customer_bears_fee: true`), so the ledger splits the full order amount.
 
 ## Multi-club isolation
 
@@ -59,17 +102,23 @@ DJs and MCs have one account each and are assigned to a venue per night (`venue_
 
 ## Data model (draft — refine in migrations)
 
-- `venues` — id, slug, name, address, status (`pending` | `active` | `suspended`), split config, min prices, request timeout minutes
-- `profiles` — id (auth user), display name, role(s), Bachs connected account id, payout status
-- `venue_staff` — venue_id, profile_id, role (`club_manager` | `dj` | `mc`), invited_by, status
-- `invites` — venue_id, role, token, expires_at, accepted_by
-- `venue_nights` — venue_id, date, dj_profile_id, mc_profile_id, opened_at, closed_at, settled_at
-- `orders` — venue_id, venue_night_id, type (`spray` | `screen_shoutout` | `mc_shoutout` | `song_request`), nickname, message, song fields, amount, currency, status (`pending_payment` | `paid` | `approved` | `rejected` | `fulfilled` | `refunded` | `expired`), target (for sprays), created_at
+- `venues` — id, slug, name, address, city, area, nights, music_style, status (`pending` | `active` | `suspended`), `listed` (bool), `accepting_staff_requests` (bool), `staff_join_code` (unique), currency, request timeout minutes
+- `venue_pricing` — public, per order type: enabled, min_amount (the DJ controls song requests)
+- `venue_splits` — private, per order type: club/dj/mc/platform basis points (sum 10000)
+- `venue_target_splits` — private, per venue: target/club/platform basis points for targeted sprays (default 5000/4000/1000)
+- `profiles` — id (auth user), real name, stage name, role(s), phone (verified)
+- `payout_accounts` — owner is a venue (club share; set by admin) or a profile (DJ/MC); provider, recipient_id, status. Provider-neutral.
+- `venue_staff` — venue_id, profile_id, role (`club_manager` | `dj` | `mc`), source (`invite` | `request` | `admin`), status (`active` | `removed` | `left`), joined_at, ended_at
+- `invites` — venue_id, role, token (unique), invitee_name, created_by, expires_at, cancelled_at, accepted_by, accepted_at
+- `staff_requests` — venue_id, profile_id, role, note, status (`pending` | `approved` | `declined` | `withdrawn`), decided_by, decided_at; unique pending per (venue_id, profile_id)
+- `venue_nights` — venue_id, date, opened_at, closed_at, settled_at
+- `venue_sets` — venue_id, venue_night_id, profile_id, role (`dj` | `mc`), starts_at, ends_at (null = still on), source (`lineup` | `clock_in`), confirmed_by; exclusion constraint: no overlapping sets of the same role per venue
+- `orders` — venue_id, venue_night_id, type (`spray` | `screen_shoutout` | `mc_shoutout` | `song_request`), nickname, message, song fields, amount, currency, status (`pending_payment` | `paid` | `approved` | `rejected` | `fulfilled` | `refunded` | `expired`), spray_target (`dj` | `mc`) + target_profile_id (targeted sprays only; null = untargeted), dj_set_id and mc_set_id (set active when paid), created_at
 - `payments` — order_id, provider, provider_checkout_id, provider_collection_id (unique), amount, currency, status, raw payload
-- `ledger_entries` — order_id, venue_night_id, party (`club` | `dj` | `mc` | `platform`), profile_id, amount, currency, kind (`share` | `refund_reversal`)
+- `ledger_entries` — order_id, venue_night_id, party (`club` | `dj` | `mc` | `platform`), profile_id (null on a dj/mc share = unassigned), amount, currency, kind (`share` | `refund_reversal`), assigned_at, assigned_by. Append-only; the one allowed update is assigning an unassigned share.
 - `refunds` — order_id, provider_refund_id, amount, status, reason
 - `payouts` — venue_night_id, profile_id, amount, provider_payout_id, idempotency_key, status
-- `webhook_events` — provider_event_id (unique), type, received_at, processed_at
+- `webhook_events` — provider_event_id (unique), type, received_at, processed_at, error (set when an event needs admin review)
 
 ## Product rules
 
@@ -95,7 +144,7 @@ DJs and MCs have one account each and are assigned to a venue per night (`venue_
 
 ## Out of scope for the MVP
 
-Native apps, wallets/stored balances, loyalty, song battles, artist-paid plays, brand sponsorships, DJ software integrations, Bluetooth/offline mode. Don't build these unless asked.
+Native apps, wallets/stored balances, loyalty, song battles, artist-paid plays, brand sponsorships, DJ software integrations, Bluetooth/offline mode, back-to-back (shared) DJ/MC sets, spraying non-staff celebrants. Don't build these unless asked.
 
 ## Build order
 
@@ -104,5 +153,7 @@ Native apps, wallets/stored balances, loyalty, song battles, artist-paid plays, 
 3. Bachs sandbox: create checkout → webhook → order paid → ledger entries (end-to-end test).
 4. Attendee venue page (QR landing) and checkout.
 5. Realtime: DJ queue, MC view, club screen.
-6. Refund timeout job, nightly settlement and payouts to connected accounts.
-7. Admin: onboard venue/DJ/MC, invites, refunds.
+6. Lineups and attribution: `venue_sets`, unassigned song-request/MC-shoutout shares, targeted sprays (before settlement, so settlement is built once).
+7. Refund timeout job, nightly settlement and payouts to connected accounts.
+8. Staff onboarding: phone OTP (Termii), invites, venue directory, join requests, join code/booth QR, lineup scheduling and clock-in.
+9. Admin: approve venues, venue payout accounts, suspend profiles, refunds, disputes.
