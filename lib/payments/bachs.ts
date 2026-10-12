@@ -6,6 +6,9 @@ import { amountSchema, currencySchema } from "@/lib/money-schema";
 import {
   type Checkout,
   type CreateCheckoutInput,
+  type CreateRefundInput,
+  type Refund,
+  type RefundStatus,
   type PaymentEvent,
   type PaymentProvider,
   PaymentProviderError,
@@ -33,6 +36,24 @@ const checkoutResponseSchema = z.object({
   checkout_url: z.url(),
   expires_at: z.string(),
 });
+
+const refundResponseSchema = z.object({
+  refund_id: z.string().min(1),
+  status: z.string(),
+});
+
+const refundEventSchema = z.object({
+  refund_id: z.string().min(1),
+  reference: z.string().nullish(),
+  status: z.string(),
+});
+
+// Bachs refund statuses: processing -> success | failed.
+function refundStatus(status: string): RefundStatus {
+  if (status === "success" || status === "succeeded") return "succeeded";
+  if (status === "failed") return "failed";
+  return "processing";
+}
 
 const envelopeSchema = z.object({
   id: z.string().min(1),
@@ -131,6 +152,26 @@ export function createBachsProvider(config: BachsConfig): PaymentProvider {
       };
     },
 
+    async createRefund(input: CreateRefundInput): Promise<Refund> {
+      const json = await post(
+        "/v1/refunds",
+        {
+          charge_id: input.chargeId,
+          reference: input.reference,
+          reason: input.reason,
+          idempotency_key: input.idempotencyKey,
+          // We absorb any refund fee so the customer gets the full order amount back.
+          fee_bearer: "org",
+        },
+        input.idempotencyKey,
+      );
+      const parsed = refundResponseSchema.safeParse(json);
+      if (!parsed.success) {
+        throw new PaymentProviderError("Unexpected Bachs refund response", null, null);
+      }
+      return { providerRefundId: parsed.data.refund_id, status: refundStatus(parsed.data.status) };
+    },
+
     parseWebhook(rawBody: string, headers: Headers): PaymentEvent {
       if (!config.webhookSecret) throw new WebhookNotConfiguredError();
       verifySignature(rawBody, headers, config.webhookSecret, now());
@@ -147,11 +188,15 @@ export function createBachsProvider(config: BachsConfig): PaymentProvider {
 // HMAC-SHA256(secret, "<t>.<raw body>"). Several v1 values appear during secret
 // rotation; any match is accepted. Falls back to the legacy
 // X-Bachs-Signature + X-Bachs-Timestamp pair.
+// The docs use the X- names; the dashboard says "Bachs-Signature", so both
+// spellings are accepted until a real delivery confirms which is sent.
+const header = (headers: Headers, name: string) => headers.get(`x-${name}`) ?? headers.get(name);
+
 export function verifySignature(rawBody: string, headers: Headers, secret: string, nowMs: number): void {
   let timestamp: string | undefined;
   let signatures: string[] = [];
 
-  const v2 = headers.get("x-bachs-signature-v2");
+  const v2 = header(headers, "bachs-signature-v2");
   if (v2) {
     for (const part of v2.split(",")) {
       const [key, ...rest] = part.trim().split("=");
@@ -160,8 +205,8 @@ export function verifySignature(rawBody: string, headers: Headers, secret: strin
       if (key === "v1" && value) signatures.push(value);
     }
   } else {
-    timestamp = headers.get("x-bachs-timestamp") ?? undefined;
-    const legacy = headers.get("x-bachs-signature");
+    timestamp = header(headers, "bachs-timestamp") ?? undefined;
+    const legacy = header(headers, "bachs-signature");
     if (legacy) signatures = [legacy];
   }
 
@@ -257,6 +302,18 @@ function toPaymentEvent(envelope: z.infer<typeof envelopeSchema>, payload: unkno
       ...base,
       orderId: orderIdFrom(data.data),
       checkoutId: data.data.checkout_id ?? null,
+    };
+  }
+
+  if (envelope.type === "refund.created" || envelope.type === "refund.paid" || envelope.type === "refund.failed") {
+    const data = refundEventSchema.safeParse(envelope.data);
+    if (!data.success) throw new WebhookSignatureError(`Malformed ${envelope.type} data`);
+    return {
+      kind: "refund_updated",
+      ...base,
+      refundId: uuid.safeParse(data.data.reference).success ? (data.data.reference as string) : null,
+      providerRefundId: data.data.refund_id,
+      status: refundStatus(data.data.status),
     };
   }
 

@@ -6,7 +6,15 @@ import type { PaymentProvider } from "./types";
 // Payment provider boundary. All Bachs calls live in this folder behind
 // PaymentProvider, so we can swap to Paystack/Flutterwave later.
 
-export type { Checkout, CreateCheckoutInput, PaymentEvent, PaymentProvider } from "./types";
+export type {
+  Checkout,
+  CreateCheckoutInput,
+  CreateRefundInput,
+  PaymentEvent,
+  PaymentProvider,
+  Refund,
+  RefundStatus,
+} from "./types";
 export { PaymentProviderError, WebhookNotConfiguredError, WebhookSignatureError } from "./types";
 
 export function getPaymentProvider(): PaymentProvider {

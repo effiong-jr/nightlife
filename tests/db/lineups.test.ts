@@ -315,19 +315,23 @@ describe("settlement never pays unassigned shares", () => {
         { party: "mc", profile_id: v.mcId, amount: "2500.00" },
       ]);
 
-      // Rejected: the DJ share stays unassigned (it gets refunded), never paid.
+      // Rejected: the song is refunded, so all its shares are reversed. Its
+      // unassigned DJ share is never paid, and nor are the others.
       await asKeeping(db, v.djId, () => db.query("update public.orders set status = 'rejected' where id = $1", [song]));
-      expect(await settlement(db, v.nightId)).toEqual(before);
-      expect(await unassignedTotal(db, v.nightId)).toBe("3500.00");
+      expect(await settlement(db, v.nightId)).toEqual([
+        { party: "club", profile_id: null, amount: "1600.00" },
+        { party: "dj", profile_id: v.djId, amount: "1000.00" },
+      ]);
+      expect(await unassignedTotal(db, v.nightId)).toBe("1000.00");
 
-      // Read: the MC who read it is now owed that share too.
+      // Read: the MC who read it is now owed that share.
       await asKeeping(db, v.mcId, () => db.query("update public.orders set status = 'fulfilled' where id = $1", [shoutout]));
       expect(await settlement(db, v.nightId)).toEqual([
-        { party: "club", profile_id: null, amount: "5600.00" },
+        { party: "club", profile_id: null, amount: "1600.00" },
         { party: "dj", profile_id: v.djId, amount: "1000.00" },
-        { party: "mc", profile_id: v.mcId, amount: "3500.00" },
+        { party: "mc", profile_id: v.mcId, amount: "1000.00" },
       ]);
-      expect(await unassignedTotal(db, v.nightId)).toBe("2500.00");
+      expect(await unassignedTotal(db, v.nightId)).toBe("0.00");
     });
   });
 

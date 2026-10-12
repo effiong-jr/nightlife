@@ -20,6 +20,20 @@ export type Checkout = {
   expiresAt: string;
 };
 
+export type CreateRefundInput = {
+  // The provider's ID for the original payment (our payments.provider_collection_id).
+  chargeId: string;
+  // Our refund ID: unique per refund, echoed back in refund webhooks.
+  reference: string;
+  idempotencyKey: string;
+  reason: string;
+  // Omitted: full refund (the only kind we make).
+};
+
+export type RefundStatus = "processing" | "succeeded" | "failed";
+
+export type Refund = { providerRefundId: string; status: RefundStatus };
+
 // A verified webhook, normalised to what the app acts on.
 export type PaymentEvent =
   | {
@@ -53,11 +67,24 @@ export type PaymentEvent =
       checkoutId: string | null;
       payload: unknown;
     }
+  | {
+      kind: "refund_updated";
+      eventId: string;
+      type: string;
+      // Our refund ID (the reference we sent), when present.
+      refundId: string | null;
+      providerRefundId: string;
+      status: RefundStatus;
+      payload: unknown;
+    }
   | { kind: "ignored"; eventId: string; type: string; payload: unknown };
 
 export interface PaymentProvider {
   readonly name: string;
   createCheckout(input: CreateCheckoutInput): Promise<Checkout>;
+  // Full refund of a collected payment. Asynchronous: the outcome arrives as a
+  // refund_updated webhook. Throws PaymentProviderError.
+  createRefund(input: CreateRefundInput): Promise<Refund>;
   // Verifies the signature and parses the event. Throws WebhookSignatureError,
   // or WebhookNotConfiguredError when there's no secret to verify with.
   parseWebhook(rawBody: string, headers: Headers): PaymentEvent;

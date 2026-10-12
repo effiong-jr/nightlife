@@ -255,14 +255,14 @@ isOneToOne: false
                   ]
                 },"refunds": {
                   Row: {
-                    "amount": number,"created_at": string,"currency": string,"id": string,"idempotency_key": string,"order_id": string,"provider": string,"provider_refund_id": string | null,"reason": string,"status": Database["public"]['Enums']["refund_status"],"updated_at": string,"venue_id": string
+                    "amount": number,"attempts": number,"created_at": string,"currency": string,"id": string,"idempotency_key": string,"last_error": string | null,"next_attempt_at": string,"order_id": string,"provider": string,"provider_refund_id": string | null,"reason": string,"status": Database["public"]['Enums']["refund_status"],"updated_at": string,"venue_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"created_at"?: string,"currency": string,"id"?: string,"idempotency_key": string,"order_id": string,"provider": string,"provider_refund_id"?: string | null,"reason": string,"status"?: Database["public"]['Enums']["refund_status"],"updated_at"?: string,"venue_id": string
+                    "amount": number,"attempts"?: number,"created_at"?: string,"currency": string,"id"?: string,"idempotency_key": string,"last_error"?: string | null,"next_attempt_at"?: string,"order_id": string,"provider": string,"provider_refund_id"?: string | null,"reason": string,"status"?: Database["public"]['Enums']["refund_status"],"updated_at"?: string,"venue_id": string
                   }
                   Update: {
-                    "amount"?: number,"created_at"?: string,"currency"?: string,"id"?: string,"idempotency_key"?: string,"order_id"?: string,"provider"?: string,"provider_refund_id"?: string | null,"reason"?: string,"status"?: Database["public"]['Enums']["refund_status"],"updated_at"?: string,"venue_id"?: string
+                    "amount"?: number,"attempts"?: number,"created_at"?: string,"currency"?: string,"id"?: string,"idempotency_key"?: string,"last_error"?: string | null,"next_attempt_at"?: string,"order_id"?: string,"provider"?: string,"provider_refund_id"?: string | null,"reason"?: string,"status"?: Database["public"]['Enums']["refund_status"],"updated_at"?: string,"venue_id"?: string
                   }
                   Relationships: [
                     {
@@ -475,6 +475,11 @@ isOneToOne: true
 "can_place_order":
 { Args: { "p_amount": number,"p_currency": string,"p_night_id": string,"p_type": Database["public"]['Enums']["order_type"],"p_venue_id": string }; Returns: boolean
                            },
+"claim_due_refunds":
+{ Args: { "p_limit"?: number,"p_order_id"?: string }; Returns: {
+              "amount": string,"attempts": number,"charge_id": string,"currency": string,"id": string,"idempotency_key": string,"order_id": string,"provider": string,"reason": string
+            }[]
+                           },
 "compute_split":
 { Args: { "p_amount": number,"p_club_bps": number,"p_dj_bps": number,"p_has_dj": boolean,"p_has_mc": boolean,"p_mc_bps": number,"p_platform_bps": number }; Returns: {
               "amount": number,"party": Database["public"]['Enums']["ledger_party"]
@@ -482,6 +487,9 @@ isOneToOne: true
                            },
 "end_set":
 { Args: { "p_set_id": string }; Returns: undefined
+                           },
+"expire_stale_orders":
+{ Args: Record<PropertyKey, never>; Returns: number
                            },
 "has_venue_role":
 { Args: { "p_roles": (Database["public"]['Enums']["staff_role"])[],"p_venue_id": string }; Returns: boolean
@@ -498,6 +506,9 @@ isOneToOne: true
 "is_venue_staff":
 { Args: { "p_venue_id": string }; Returns: boolean
                            },
+"kick_refund_worker":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
 "night_settlement_amounts":
 { Args: { "p_venue_night_id": string }; Returns: {
               "amount": number,"currency": string,"party": Database["public"]['Enums']["ledger_party"],"profile_id": string
@@ -509,8 +520,14 @@ isOneToOne: true
 "record_paid_order":
 { Args: { "p_amount": number,"p_checkout_id": string,"p_collection_id": string,"p_currency": string,"p_event_id": string,"p_event_type": string,"p_order_id": string,"p_payload": Json,"p_provider": string }; Returns: string
                            },
+"record_refund_status":
+{ Args: { "p_error": string,"p_provider_refund_id": string,"p_refund_id": string,"p_status": Database["public"]['Enums']["refund_status"] }; Returns: undefined
+                           },
 "record_webhook_failure":
 { Args: { "p_error": string,"p_event_id": string,"p_event_type": string,"p_payload": Json,"p_provider": string }; Returns: undefined
+                           },
+"request_refund":
+{ Args: { "p_order_id": string,"p_reason": string }; Returns: string
                            },
 "screen_display_name":
 { Args: { "p_order": Omit<Database["public"]['Tables']["orders"]['Row'], Database["public"]['Tables']["orders"]['ComputedFields']> }; Returns: string
@@ -524,6 +541,9 @@ isOneToOne: true
 "start_set":
 { Args: { "p_profile_id": string,"p_role": Database["public"]['Enums']["staff_role"],"p_venue_id": string }; Returns: string
                            },
+"timeout_song_requests":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
 "venue_spray_targets":
 { Args: { "p_venue_id": string }; Returns: {
               "name": string,"on_now": boolean,"profile_id": string,"role": Database["public"]['Enums']["staff_role"]
@@ -531,7 +551,7 @@ isOneToOne: true
                            }
           }
           Enums: {
-            "ledger_kind": "share"|"refund_reversal","ledger_party": "club"|"dj"|"mc"|"platform","order_status": "pending_payment"|"paid"|"approved"|"rejected"|"fulfilled"|"refunded"|"expired","order_type": "spray"|"screen_shoutout"|"mc_shoutout"|"song_request","payment_status": "pending"|"succeeded"|"failed","payout_account_status": "pending"|"active"|"restricted","payout_status": "pending"|"processing"|"paid"|"failed","refund_status": "pending"|"succeeded"|"failed","spray_target": "dj"|"mc"|"celebrant","staff_role": "club_manager"|"dj"|"mc","staff_source": "invite"|"request"|"admin","staff_status": "active"|"removed"|"left","venue_status": "pending"|"active"|"suspended"
+            "ledger_kind": "share"|"refund_reversal","ledger_party": "club"|"dj"|"mc"|"platform","order_status": "pending_payment"|"paid"|"approved"|"rejected"|"fulfilled"|"refunded"|"expired","order_type": "spray"|"screen_shoutout"|"mc_shoutout"|"song_request","payment_status": "pending"|"succeeded"|"failed","payout_account_status": "pending"|"active"|"restricted","payout_status": "pending"|"processing"|"paid"|"failed","refund_status": "pending"|"processing"|"succeeded"|"failed","spray_target": "dj"|"mc"|"celebrant","staff_role": "club_manager"|"dj"|"mc","staff_source": "invite"|"request"|"admin","staff_status": "active"|"removed"|"left","venue_status": "pending"|"active"|"suspended"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -651,7 +671,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "ledger_kind": ["share", "refund_reversal"],"ledger_party": ["club", "dj", "mc", "platform"],"order_status": ["pending_payment", "paid", "approved", "rejected", "fulfilled", "refunded", "expired"],"order_type": ["spray", "screen_shoutout", "mc_shoutout", "song_request"],"payment_status": ["pending", "succeeded", "failed"],"payout_account_status": ["pending", "active", "restricted"],"payout_status": ["pending", "processing", "paid", "failed"],"refund_status": ["pending", "succeeded", "failed"],"spray_target": ["dj", "mc", "celebrant"],"staff_role": ["club_manager", "dj", "mc"],"staff_source": ["invite", "request", "admin"],"staff_status": ["active", "removed", "left"],"venue_status": ["pending", "active", "suspended"]
+            "ledger_kind": ["share", "refund_reversal"],"ledger_party": ["club", "dj", "mc", "platform"],"order_status": ["pending_payment", "paid", "approved", "rejected", "fulfilled", "refunded", "expired"],"order_type": ["spray", "screen_shoutout", "mc_shoutout", "song_request"],"payment_status": ["pending", "succeeded", "failed"],"payout_account_status": ["pending", "active", "restricted"],"payout_status": ["pending", "processing", "paid", "failed"],"refund_status": ["pending", "processing", "succeeded", "failed"],"spray_target": ["dj", "mc", "celebrant"],"staff_role": ["club_manager", "dj", "mc"],"staff_source": ["invite", "request", "admin"],"staff_status": ["active", "removed", "left"],"venue_status": ["pending", "active", "suspended"]
           }
         }
 } as const

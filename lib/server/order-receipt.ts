@@ -13,6 +13,8 @@ export type OrderReceipt = {
   createdAt: string;
   venueName: string;
   requestTimeoutMinutes: number;
+  // Latest refund attempt, if the order is being refunded.
+  refund: { status: "pending" | "processing" | "succeeded" | "failed"; reason: string } | null;
 };
 
 // The order ID (a random UUID from the checkout return URL) is the attendee's
@@ -23,7 +25,9 @@ export async function getOrderReceipt(orderId: string, venueSlug: string): Promi
 
   const { data, error } = await createAdminClient()
     .from("orders")
-    .select("id, type, status, nickname, amount::text, created_at, venues!inner(slug, name, request_timeout_minutes)")
+    .select(
+      "id, type, status, nickname, amount::text, created_at, venues!inner(slug, name, request_timeout_minutes), refunds(status, reason, created_at)",
+    )
     .eq("id", orderId)
     .eq("venues.slug", venueSlug)
     .maybeSingle();
@@ -40,5 +44,9 @@ export async function getOrderReceipt(orderId: string, venueSlug: string): Promi
     createdAt: data.created_at,
     venueName: data.venues.name,
     requestTimeoutMinutes: data.venues.request_timeout_minutes,
+    refund:
+      [...data.refunds]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((r) => ({ status: r.status, reason: r.reason }))[0] ?? null,
   };
 }

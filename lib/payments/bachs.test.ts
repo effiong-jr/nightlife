@@ -77,6 +77,12 @@ describe("verifySignature", () => {
     );
   });
 
+  it("accepts the header names without the X- prefix too", () => {
+    expect(() =>
+      verifySignature(body, headers({ "bachs-signature-v2": signPayload(body, SECRET, NOW_S) }), SECRET, NOW_MS),
+    ).not.toThrow();
+  });
+
   it("rejects a request with no signature", () => {
     expect(() => verifySignature(body, headers({}), SECRET, NOW_MS)).toThrow(WebhookSignatureError);
   });
@@ -279,5 +285,47 @@ describe("createCheckout", () => {
       code: "IDEMPOTENCY_CONFLICT",
     });
     await expect(provider.createCheckout(input)).rejects.toBeInstanceOf(PaymentProviderError);
+  });
+});
+
+describe("refunds", () => {
+  it("requests a full refund with idempotency, absorbing any refund fee", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => Response.json({ refund_id: "rfnd_123", status: "processing" }, { status: 201 }));
+    const provider = createBachsProvider({ secretKey: "sk_sandbox_key", fetch: fetchMock });
+
+    await expect(
+      provider.createRefund({
+        chargeId: "ch_1",
+        reference: ORDER_ID,
+        idempotencyKey: `refund_${ORDER_ID}`,
+        reason: "Song request not played in time",
+      }),
+    ).resolves.toEqual({ providerRefundId: "rfnd_123", status: "processing" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://sandbox-api.bachs.io/v1/refunds");
+    expect(init?.headers).toMatchObject({ "Idempotency-Key": `refund_${ORDER_ID}` });
+    expect(JSON.parse(init?.body as string)).toEqual({
+      charge_id: "ch_1",
+      reference: ORDER_ID,
+      reason: "Song request not played in time",
+      idempotency_key: `refund_${ORDER_ID}`,
+      fee_bearer: "org",
+    });
+  });
+
+  it("normalises refund webhooks", () => {
+    const event = (type: string, status: string) =>
+      JSON.stringify({ id: "evt_r", type, data: { refund_id: "rfnd_123", reference: ORDER_ID, status } });
+    expect(parse(event("refund.created", "processing"))).toMatchObject({
+      kind: "refund_updated",
+      refundId: ORDER_ID,
+      providerRefundId: "rfnd_123",
+      status: "processing",
+    });
+    expect(parse(event("refund.paid", "success"))).toMatchObject({ status: "succeeded" });
+    expect(parse(event("refund.failed", "failed"))).toMatchObject({ status: "failed" });
   });
 });

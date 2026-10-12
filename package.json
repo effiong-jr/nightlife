@@ -14,11 +14,12 @@
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:status": "supabase status",
-    "db:reset": "supabase db reset",
+    "db:reset": "supabase db reset && node --env-file=.env.local scripts/configure-jobs.mjs",
     "db:migration": "supabase migration new",
     "db:types": "supabase gen types typescript --local > lib/supabase/database.types.ts",
     "test:db": "vitest run --project db",
-    "db:demo": "node --env-file=.env.local scripts/demo-orders.mjs"
+    "db:demo": "node --env-file=.env.local scripts/demo-orders.mjs",
+    "db:jobs": "node --env-file=.env.local scripts/configure-jobs.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

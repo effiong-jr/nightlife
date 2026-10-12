@@ -57,6 +57,8 @@ export async function handlePaymentWebhook(
       );
     case "checkout_expired":
       return expireCheckout(event, deps);
+    case "refund_updated":
+      return applyRefundUpdate(event, deps);
     case "ignored":
       return ok("ignored");
   }
@@ -116,6 +118,48 @@ async function expireCheckout(event: EventOf<"checkout_expired">, { provider, ad
     if (error) throw error;
   }
   return ok("expired");
+}
+
+// refund.created / refund.paid / refund.failed. A paid refund marks the order
+// refunded; a failed one stays failed with an error for admin review.
+async function applyRefundUpdate(event: EventOf<"refund_updated">, deps: Deps): Promise<WebhookResult> {
+  const { provider, admin } = deps;
+  let refundId = event.refundId;
+  if (!refundId) {
+    const { data } = await admin
+      .from("refunds")
+      .select("id")
+      .eq("provider", provider.name)
+      .eq("provider_refund_id", event.providerRefundId)
+      .maybeSingle();
+    refundId = data?.id ?? null;
+  }
+  if (!refundId) return needsReview(event, `Refund ${event.providerRefundId} not found`, deps);
+
+  const { error } = await admin.rpc("record_refund_status", {
+    p_refund_id: refundId,
+    p_status: event.status,
+    p_provider_refund_id: event.providerRefundId,
+    // Nullable in SQL; generated types don't mark function args nullable.
+    p_error: (event.status === "failed" ? "Refund failed at the provider" : null) as string,
+  });
+  if (error) {
+    if (error.code === "P0002") return needsReview(event, error.message, deps);
+    throw error;
+  }
+
+  // Keep the event for the audit trail (duplicates are harmless: final states are sticky).
+  await admin.from("webhook_events").upsert(
+    {
+      provider: provider.name,
+      provider_event_id: event.eventId,
+      type: event.type,
+      payload: (event.payload ?? {}) as NonNullable<Json>,
+      processed_at: new Date().toISOString(),
+    },
+    { onConflict: "provider,provider_event_id", ignoreDuplicates: true },
+  );
+  return ok(`refund_${event.status}`);
 }
 
 // Stores the event with an error for admin review and acknowledges it, so the

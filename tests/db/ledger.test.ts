@@ -225,11 +225,11 @@ describe("record_paid_order", () => {
     });
   });
 
-  it("records a late payment for an expired order", async () => {
+  it("records a late payment for an expired order (and refunds it: see refunds.test.ts)", async () => {
     await withTx(async (db) => {
       const v = await createStaffedVenue(db);
       const orderId = await createOrder(db, { venueId: v.venueId, nightId: v.nightId, status: "expired" });
-      expect(await recordPaid(db, orderId)).toBe("recorded");
+      expect(await recordPaid(db, orderId)).toBe("recorded_late_refunding");
       await checkDeferred(db);
       expect(await ledgerFor(db, orderId)).toHaveLength(4);
     });

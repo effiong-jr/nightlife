@@ -73,7 +73,7 @@ DJs and MCs become staff at a venue in one of two ways; both end with an `active
 - Supabase: Postgres, Realtime (one channel per venue), Auth (staff only, phone OTP), Row Level Security
 - Payments: Bachs REST API called with `fetch` from `lib/payments/bachs.ts` (the docs name no official Node SDK). Docs: https://docs.bachs.io (index: https://docs.bachs.io/llms.txt)
 - SMS: Termii via Supabase's Send SMS auth hook
-- Background jobs: Supabase cron to start (refund timeouts, nightly settlement)
+- Background jobs: Supabase `pg_cron` (song-request timeouts, expiring unpaid orders, nightly settlement) and `pg_net` to call app workers (`/api/jobs/*`, authorised with `CRON_SECRET`; URL and secret in Supabase Vault)
 - Hosting: Vercel; Supabase in an EU region; Cloudflare for DNS
 - Monitoring: Sentry; analytics: PostHog
 - Tests: Vitest for unit/integration (money logic first), Playwright later for key flows
@@ -93,6 +93,7 @@ DJs and MCs become staff at a venue in one of two ways; both end with an `active
 11. **Splits are computed in whole kobo** in Postgres (`compute_split`): each party gets its basis-point share rounded down; leftover kobo goes to the platform; a DJ/MC share with nobody on the active set goes to the club.
 12. **Unassigned shares are never paid out.** A DJ/MC share with `profile_id` null (song request not yet played, MC shoutout not yet read) is excluded from settlement until it's assigned, and is reversed if the order is refunded.
 13. **The customer pays Bachs's processing fee** (`customer_bears_fee: true`), so the ledger splits the full order amount.
+14. **Refunds are full refunds of the order amount**, requested when an order is rejected (by staff, by the song-request timeout, or because the payment arrived after the order expired). Requesting a refund writes the ledger reversals in the same transaction. A worker sends it to Bachs (idempotent, with retries); `refund.*` webhooks record the outcome; failures go to admin review. We absorb any refund fee (`fee_bearer: org`); Bachs keeps its original processing fee. A Bachs payment can only be refunded once, so **over/underpayments are not auto-refunded**: they're flagged for review.
 
 ## Multi-club isolation
 

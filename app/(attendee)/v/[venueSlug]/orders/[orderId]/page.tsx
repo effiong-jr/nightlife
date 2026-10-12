@@ -99,11 +99,7 @@ function statusCopy(order: OrderReceipt): { title: string; detail: string; tone:
         tone: "good",
       };
     case "rejected":
-      return {
-        title: "Not accepted",
-        detail: `This one wasn't accepted, so you'll get ${formatNaira(order.amount)} back to your original payment method.`,
-        tone: "info",
-      };
+      return { title: rejectedTitle(order), detail: refundDetail(order), tone: "info" };
     case "refunded":
       return {
         title: "Refunded",
@@ -117,6 +113,26 @@ function statusCopy(order: OrderReceipt): { title: string; detail: string; tone:
         tone: "info",
       };
   }
+}
+
+function rejectedTitle(order: OrderReceipt): string {
+  switch (order.refund?.reason) {
+    case "request_timeout":
+      return "Not played in time";
+    case "late_payment":
+      return "Payment arrived too late";
+    default:
+      return "Not accepted";
+  }
+}
+
+// Plain and clear: what happens to their money, and when.
+function refundDetail(order: OrderReceipt): string {
+  const amount = formatNaira(order.amount);
+  if (order.refund?.status === "failed") {
+    return `We couldn't refund ${amount} automatically. We're sorting it out and will get it back to you. If it hasn't arrived within 7 working days, contact the venue with reference ${order.reference}.`;
+  }
+  return `You're getting ${amount} back to your original payment method. Card refunds usually take 5 to 7 working days.`;
 }
 
 function paidDetail(order: OrderReceipt): string {

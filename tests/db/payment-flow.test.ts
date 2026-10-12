@@ -10,6 +10,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { POST as webhookRoute } from "@/app/api/webhooks/bachs/route";
 import { createBachsProvider, signPayload } from "@/lib/payments/bachs";
 import { createOrderAndCheckout, OrderRejectedError } from "@/lib/server/orders";
+import { processDueRefunds } from "@/lib/server/refunds";
 import type { Database } from "@/lib/supabase/database.types";
 
 const WEBHOOK_SECRET = "whsec_e2e_test";
@@ -218,7 +219,7 @@ describe("payment flow (end to end)", () => {
     expect((await orderState(orderId)).order.status).toBe("pending_payment");
   });
 
-  it("expires abandoned checkouts, and still records a payment that arrives late", async () => {
+  it("expires abandoned checkouts, and records then refunds a payment that arrives late", async () => {
     const v = await setUpVenue();
     const { orderId, checkoutId } = await placeOrder(v.slug);
 
@@ -228,10 +229,69 @@ describe("payment flow (end to end)", () => {
     expect(afterExpiry.order.status).toBe("expired");
     expect(afterExpiry.payments[0].status).toBe("failed");
 
-    expect((await deliver(collectionSucceeded(orderId, checkoutId))).body.result).toBe("recorded");
+    expect((await deliver(collectionSucceeded(orderId, checkoutId))).body.result).toBe("recorded_late_refunding");
     const afterPayment = await orderState(orderId);
-    expect(afterPayment.order.status).toBe("paid");
-    expect(afterPayment.ledger).toHaveLength(4);
+    expect(afterPayment.order.status).toBe("rejected");
+    // 4 shares plus 4 refund reversals: the order nets to zero.
+    expect(afterPayment.ledger).toHaveLength(8);
+    expect(afterPayment.ledger.reduce((sum, e) => sum + Number(e.amount.replace(".", "")), 0)).toBe(0);
+    const refunds = await must(admin.from("refunds").select("reason, status").eq("order_id", orderId));
+    expect(refunds).toEqual([{ reason: "late_payment", status: "pending" }]);
+  });
+
+  it("refunds a rejected order: worker -> provider -> refund.paid webhook -> refunded", async () => {
+    const v = await setUpVenue();
+    const { orderId, checkoutId } = await placeOrder(v.slug);
+    const paid = collectionSucceeded(orderId, checkoutId);
+    await deliver(paid);
+    await exec(admin.from("orders").update({ status: "rejected" }).eq("id", orderId));
+
+    const calls: unknown[] = [];
+    const providerRefundId = `rfnd_${randomUUID().slice(0, 12)}`;
+    const bachs = createBachsProvider({
+      secretKey: "sk_sandbox_e2e",
+      fetch: async (_url, init) => {
+        calls.push(JSON.parse(String(init?.body)));
+        return Response.json({ refund_id: providerRefundId, status: "processing" }, { status: 201 });
+      },
+    });
+    expect(await processDueRefunds({ admin, provider: bachs }, { orderId })).toEqual({ sent: 1, failed: 0, retrying: 0 });
+    expect(calls).toMatchObject([{ charge_id: paid.data.charge_id, fee_bearer: "org" }]);
+
+    const [refund] = await must(admin.from("refunds").select("id, status, provider_refund_id").eq("order_id", orderId));
+    expect(refund).toMatchObject({ status: "processing", provider_refund_id: providerRefundId });
+
+    const refundPaid = {
+      id: `evt_${randomUUID()}`,
+      type: "refund.paid",
+      data: { refund_id: providerRefundId, reference: refund.id, status: "success" },
+    };
+    expect((await deliver(refundPaid)).body.result).toBe("refund_succeeded");
+    expect((await orderState(orderId)).order.status).toBe("refunded");
+  });
+
+  it("retries refunds on provider outages and fails them on refusals", async () => {
+    const v = await setUpVenue();
+    const refusing = await placeOrder(v.slug);
+    const flaky = await placeOrder(v.slug);
+    for (const o of [refusing, flaky]) {
+      await deliver(collectionSucceeded(o.orderId, o.checkoutId));
+      await exec(admin.from("orders").update({ status: "rejected" }).eq("id", o.orderId));
+    }
+    const providerAnswering = (status: number, body: object) =>
+      createBachsProvider({ secretKey: "sk_sandbox_e2e", fetch: async () => Response.json(body, { status }) });
+
+    const refused = providerAnswering(400, { detail: "Bank transfer payments are not refundable", error_code: "NOT_REFUNDABLE" });
+    expect(await processDueRefunds({ admin, provider: refused }, { orderId: refusing.orderId })).toMatchObject({ failed: 1 });
+    const [failed] = await must(admin.from("refunds").select("status, last_error").eq("order_id", refusing.orderId));
+    expect(failed.status).toBe("failed");
+    expect(failed.last_error).toMatch(/not refundable/);
+
+    const down = providerAnswering(503, { detail: "Service unavailable" });
+    expect(await processDueRefunds({ admin, provider: down }, { orderId: flaky.orderId })).toMatchObject({ retrying: 1 });
+    const [retrying] = await must(admin.from("refunds").select("status, attempts, last_error").eq("order_id", flaky.orderId));
+    expect(retrying).toMatchObject({ status: "pending", attempts: 1 });
+    expect(retrying.last_error).toMatch(/503/);
   });
 
   it("enforces venue rules when placing orders", async () => {
