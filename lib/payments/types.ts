@@ -53,6 +53,27 @@ export type CreatePayeeAccountInput = {
 
 export type OnboardingLink = { url: string; expiresAt: string };
 
+export type TransferToPayeeInput = {
+  accountId: string;
+  amount: Money;
+  // Groups a night's transfers (we use the night ID).
+  group: string;
+  description: string;
+  idempotencyKey: string;
+};
+
+export type PayoutToBankInput = {
+  accountId: string;
+  destinationId: string;
+  // What arrives in the bank (the provider's fee is charged on top).
+  amount: Money;
+  // Our payout ID, echoed back in payout webhooks.
+  reference: string;
+  idempotencyKey: string;
+};
+
+export type ProviderPayout = { payoutId: string; status: "processing" | "paid" | "failed"; fee: string | null };
+
 // A verified webhook, normalised to what the app acts on.
 export type PaymentEvent =
   | {
@@ -97,6 +118,17 @@ export type PaymentEvent =
       payload: unknown;
     }
   | {
+      kind: "payout_updated";
+      eventId: string;
+      type: string;
+      providerPayoutId: string;
+      // Our payout ID (the reference we sent), when present.
+      payoutId: string | null;
+      status: "paid" | "failed";
+      error: string | null;
+      payload: unknown;
+    }
+  | {
       // A payee account's verification or capabilities changed: re-read it.
       kind: "payee_account_changed";
       eventId: string;
@@ -116,6 +148,12 @@ export interface PaymentProvider {
   getPayeeAccount(accountId: string): Promise<PayeeAccount>;
   // Single-use, short-lived URL for the provider's hosted verification flow.
   createOnboardingLink(input: { accountId: string; returnUrl: string; refreshUrl: string }): Promise<OnboardingLink>;
+  // Settlement, hop 1: our available balance -> the payee's account.
+  transferToPayee(input: TransferToPayeeInput): Promise<{ transferId: string }>;
+  // The payee's default, usable bank account for a currency, if any.
+  getDefaultPayoutDestination(accountId: string, currency: string): Promise<string | null>;
+  // Settlement, hop 2: the payee's account -> their bank.
+  payoutToBank(input: PayoutToBankInput): Promise<ProviderPayout>;
   // Verifies the signature and parses the event. Throws WebhookSignatureError,
   // or WebhookNotConfiguredError when there's no secret to verify with.
   parseWebhook(rawBody: string, headers: Headers): PaymentEvent;

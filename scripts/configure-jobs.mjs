@@ -1,4 +1,4 @@
-// Local dev only: tells pg_cron where to call the refund worker.
+// Local dev only: tells pg_cron where to call the refund and payout workers.
 // Stores Vault secrets `app_url` (the dev server, as seen from Docker) and
 // `cron_secret` (CRON_SECRET from .env.local). Runs after `npm run db:reset`.
 //
@@ -26,4 +26,4 @@ for (const [name, value] of [
   else await client.query("select vault.create_secret($1, $2)", [value, name]);
 }
 await client.end();
-console.log(`Jobs configured: refund worker at ${appUrl}/api/jobs/refunds`);
+console.log(`Jobs configured: workers at ${appUrl}/api/jobs/{refunds,payouts}`);

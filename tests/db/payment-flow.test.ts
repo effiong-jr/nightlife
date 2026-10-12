@@ -10,6 +10,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { POST as webhookRoute } from "@/app/api/webhooks/bachs/route";
 import { createBachsProvider, signPayload } from "@/lib/payments/bachs";
 import { createOrderAndCheckout, OrderRejectedError } from "@/lib/server/orders";
+import { processDuePayouts } from "@/lib/server/payouts";
 import { processDueRefunds } from "@/lib/server/refunds";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -299,5 +300,77 @@ describe("payment flow (end to end)", () => {
     await expect(placeOrder(v.slug, "999.99")).rejects.toMatchObject({ reason: "not_allowed" });
     await expect(placeOrder("no-such-venue")).rejects.toBeInstanceOf(OrderRejectedError);
     await expect(placeOrder("no-such-venue")).rejects.toMatchObject({ reason: "venue_not_found" });
+  });
+});
+
+describe("settlement payouts (end to end, provider stubbed)", () => {
+  async function settledNight() {
+    const v = await setUpVenue();
+    const djAccount = `acct_${randomUUID().slice(0, 12)}`;
+    await exec(admin.from("payout_accounts").insert({ profile_id: v.djId, provider: "bachs", recipient_id: djAccount, status: "active" }));
+    const { orderId, checkoutId } = await placeOrder(v.slug, "10000.00");
+    await deliver(collectionSucceeded(orderId, checkoutId, "10000.00"));
+    const night = await must(admin.from("venue_nights").select("id").eq("venue_id", v.venueId).single());
+    await exec(admin.rpc("close_night", { p_night_id: night.id }));
+    await exec(admin.rpc("settle_night", { p_night_id: night.id }));
+    const payout = await must(admin.from("payouts").select("id").eq("venue_night_id", night.id).eq("party", "dj").single());
+    return { djAccount, payoutId: payout.id };
+  }
+
+  const stub = (handlers: Record<string, (init: RequestInit) => Response>) =>
+    createBachsProvider({
+      secretKey: "sk_sandbox_e2e",
+      fetch: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        const method = init?.method ?? "GET";
+        const handler = handlers[`${method} ${path}`];
+        if (!handler) throw new Error(`unexpected ${method} ${path}`);
+        return handler(init ?? {});
+      },
+    });
+
+  const payoutRow = async (id: string) =>
+    must(admin.from("payouts").select("status, held_reason, provider_transfer_id, provider_payout_id, fee::text, last_error").eq("id", id).single());
+
+  it("transfers to the DJ, pays out net of the fee, then records payout.paid", async () => {
+    const { djAccount, payoutId } = await settledNight();
+    const sent: Record<string, unknown> = {};
+    const providerPayoutId = `pay_${randomUUID().slice(0, 12)}`;
+    const bachs = stub({
+      "POST /v1/transfers": (init) => ((sent.transfer = JSON.parse(String(init.body))), Response.json({ id: `tr_${randomUUID().slice(0, 8)}`, status: "paid" })),
+      "GET /v1/payouts/destinations": () => Response.json({ destinations: [{ id: "pd_dj", currency: "NGN", is_default: true, is_usable: true }] }),
+      "POST /v1/payouts": (init) => ((sent.payout = JSON.parse(String(init.body))), Response.json({ id: providerPayoutId, status: "pending", fee: "50.00" })),
+    });
+
+    expect(await processDuePayouts({ admin, provider: bachs }, { payoutId })).toMatchObject({ transferred: 1, submitted: 1 });
+    // DJ share of a ₦10,000 spray (25%) = ₦2,500; ₦2,450 reaches the bank.
+    expect(sent.transfer).toMatchObject({ destination: djAccount, amount: "2500.00", currency: "NGN" });
+    expect(sent.payout).toEqual({ destination: "pd_dj", amount: "2450.00", reference: payoutId });
+    expect(await payoutRow(payoutId)).toMatchObject({ status: "processing", provider_payout_id: providerPayoutId, fee: "50.00" });
+
+    const paid = { id: `evt_${randomUUID()}`, type: "payout.paid", data: { withdrawal_id: providerPayoutId, reference: payoutId, status: "completed" } };
+    expect((await deliver(paid)).body.result).toBe("payout_paid");
+    expect((await payoutRow(payoutId)).status).toBe("paid");
+  });
+
+  it("holds the payout (money safe in their account) when they have no bank account yet", async () => {
+    const { payoutId } = await settledNight();
+    const bachs = stub({
+      "POST /v1/transfers": () => Response.json({ id: `tr_${randomUUID().slice(0, 8)}`, status: "paid" }),
+      "GET /v1/payouts/destinations": () => Response.json({ destinations: [] }),
+    });
+    expect(await processDuePayouts({ admin, provider: bachs }, { payoutId })).toMatchObject({ transferred: 1, held: 1 });
+    expect(await payoutRow(payoutId)).toMatchObject({ status: "held", held_reason: "no_bank_account" });
+    expect((await payoutRow(payoutId)).provider_transfer_id).toMatch(/^tr_/);
+  });
+
+  it("retries when our available balance is short, instead of failing", async () => {
+    const { payoutId } = await settledNight();
+    const bachs = stub({
+      "POST /v1/transfers": () => Response.json({ detail: "Insufficient available balance", error_code: "INSUFFICIENT_BALANCE" }, { status: 400 }),
+    });
+    expect(await processDuePayouts({ admin, provider: bachs }, { payoutId })).toMatchObject({ retrying: 1 });
+    expect(await payoutRow(payoutId)).toMatchObject({ status: "pending" });
+    expect((await payoutRow(payoutId)).last_error).toMatch(/INSUFFICIENT_BALANCE/);
   });
 });

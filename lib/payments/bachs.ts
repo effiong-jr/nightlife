@@ -10,6 +10,9 @@ import {
   type CreateRefundInput,
   type OnboardingLink,
   type PayeeAccount,
+  type PayoutToBankInput,
+  type ProviderPayout,
+  type TransferToPayeeInput,
   type Refund,
   type RefundStatus,
   type PaymentEvent,
@@ -105,6 +108,35 @@ function toPayeeAccount(json: unknown): PayeeAccount {
 
 const connectEventSchema = z.object({ account: z.string().min(1) });
 
+const transferResponseSchema = z.object({ id: z.string().min(1), status: z.string().optional() });
+
+// Observed in the sandbox: { destinations: [{ id, currency, is_default, is_usable, ... }] }
+const destinationsSchema = z.object({
+  destinations: z.array(
+    z.object({ id: z.string(), currency: z.string(), is_default: z.boolean().optional(), is_usable: z.boolean().optional() }),
+  ),
+});
+
+const payoutResponseSchema = z.object({
+  id: z.string().min(1),
+  status: z.string(),
+  fee: z.union([z.string(), z.number()]).nullish(),
+});
+
+// payout.paid / payout.failed: data.withdrawal_id is the payout ID.
+const payoutEventSchema = z.object({
+  withdrawal_id: z.string().min(1),
+  reference: z.string().nullish(),
+  status: z.string().optional(),
+  failure_reason: z.string().nullish(),
+});
+
+function payoutStatus(status: string): ProviderPayout["status"] {
+  if (status === "completed" || status === "paid") return "paid";
+  if (status === "failed") return "failed";
+  return "processing";
+}
+
 const envelopeSchema = z.object({
   id: z.string().min(1),
   type: z.string().min(1),
@@ -137,10 +169,18 @@ export function createBachsProvider(config: BachsConfig): PaymentProvider {
   const doFetch = config.fetch ?? fetch;
   const now = config.now ?? Date.now;
 
-  const post = (path: string, body: unknown, idempotencyKey: string) => call("POST", path, body, idempotencyKey);
-  const get = (path: string) => call("GET", path);
+  // accountId acts as a connected account (X-Account-Id).
+  const post = (path: string, body: unknown, idempotencyKey: string, accountId?: string) =>
+    call("POST", path, body, idempotencyKey, accountId);
+  const get = (path: string, accountId?: string) => call("GET", path, undefined, undefined, accountId);
 
-  async function call(method: "GET" | "POST", path: string, body?: unknown, idempotencyKey?: string): Promise<unknown> {
+  async function call(
+    method: "GET" | "POST",
+    path: string,
+    body?: unknown,
+    idempotencyKey?: string,
+    accountId?: string,
+  ): Promise<unknown> {
     const request = () =>
       doFetch(`${baseUrl}${path}`, {
         method,
@@ -149,6 +189,7 @@ export function createBachsProvider(config: BachsConfig): PaymentProvider {
           Accept: "application/json",
           ...(body === undefined ? {} : { "Content-Type": "application/json" }),
           ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+          ...(accountId ? { "X-Account-Id": accountId } : {}),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -258,6 +299,46 @@ export function createBachsProvider(config: BachsConfig): PaymentProvider {
       const parsed = accountLinkSchema.safeParse(json);
       if (!parsed.success) throw new PaymentProviderError("Unexpected Bachs account link response", null, null);
       return { url: parsed.data.url, expiresAt: parsed.data.expires_at };
+    },
+
+    async transferToPayee(input: TransferToPayeeInput): Promise<{ transferId: string }> {
+      const json = await post(
+        "/v1/transfers",
+        {
+          destination: input.accountId,
+          amount: input.amount.amount,
+          currency: input.amount.currency,
+          transfer_group: input.group,
+          description: input.description,
+        },
+        input.idempotencyKey,
+      );
+      const parsed = transferResponseSchema.safeParse(json);
+      if (!parsed.success) throw new PaymentProviderError("Unexpected Bachs transfer response", null, null);
+      return { transferId: parsed.data.id };
+    },
+
+    async getDefaultPayoutDestination(accountId: string, currency: string): Promise<string | null> {
+      const parsed = destinationsSchema.safeParse(await get("/v1/payouts/destinations", accountId));
+      if (!parsed.success) throw new PaymentProviderError("Unexpected Bachs destinations response", null, null);
+      const usable = parsed.data.destinations.filter((d) => d.currency === currency && d.is_usable !== false);
+      return (usable.find((d) => d.is_default) ?? usable[0])?.id ?? null;
+    },
+
+    async payoutToBank(input: PayoutToBankInput): Promise<ProviderPayout> {
+      const json = await post(
+        "/v1/payouts",
+        { destination: input.destinationId, amount: input.amount.amount, reference: input.reference },
+        input.idempotencyKey,
+        input.accountId,
+      );
+      const parsed = payoutResponseSchema.safeParse(json);
+      if (!parsed.success) throw new PaymentProviderError("Unexpected Bachs payout response", null, null);
+      return {
+        payoutId: parsed.data.id,
+        status: payoutStatus(parsed.data.status),
+        fee: parsed.data.fee == null ? null : String(parsed.data.fee),
+      };
     },
 
     parseWebhook(rawBody: string, headers: Headers): PaymentEvent {
@@ -390,6 +471,19 @@ function toPaymentEvent(envelope: z.infer<typeof envelopeSchema>, payload: unkno
       ...base,
       orderId: orderIdFrom(data.data),
       checkoutId: data.data.checkout_id ?? null,
+    };
+  }
+
+  if (envelope.type === "payout.paid" || envelope.type === "payout.failed") {
+    const data = payoutEventSchema.safeParse(envelope.data);
+    if (!data.success) throw new WebhookSignatureError(`Malformed ${envelope.type} data`);
+    return {
+      kind: "payout_updated",
+      ...base,
+      providerPayoutId: data.data.withdrawal_id,
+      payoutId: uuid.safeParse(data.data.reference).success ? (data.data.reference as string) : null,
+      status: envelope.type === "payout.paid" ? "paid" : "failed",
+      error: envelope.type === "payout.failed" ? (data.data.failure_reason ?? "Payout failed") : null,
     };
   }
 

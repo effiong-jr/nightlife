@@ -399,3 +399,85 @@ describe("payee accounts (Connect)", () => {
     }
   });
 });
+
+describe("settlement calls", () => {
+  it("transfers to a payee account with an idempotency key", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ id: "tr_1", status: "paid" }));
+    const provider = createBachsProvider({ secretKey: "sk_sandbox_key", fetch: fetchMock });
+    await expect(
+      provider.transferToPayee({
+        accountId: "acct_dj",
+        amount: { amount: "5000.00", currency: "NGN" },
+        group: "night_1",
+        description: "Nightlife earnings",
+        idempotencyKey: "transfer_p1",
+      }),
+    ).resolves.toEqual({ transferId: "tr_1" });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://sandbox-api.bachs.io/v1/transfers");
+    expect(init?.headers).toMatchObject({ "Idempotency-Key": "transfer_p1" });
+    expect(init?.headers).not.toHaveProperty("X-Account-Id");
+    expect(JSON.parse(init?.body as string)).toEqual({
+      destination: "acct_dj",
+      amount: "5000.00",
+      currency: "NGN",
+      transfer_group: "night_1",
+      description: "Nightlife earnings",
+    });
+  });
+
+  it("picks the default usable bank account, acting as the payee", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
+      Response.json({
+        destinations: [
+          { id: "pd_usd", currency: "USD", is_default: true, is_usable: true },
+          { id: "pd_old", currency: "NGN", is_default: false, is_usable: true },
+          { id: "pd_new", currency: "NGN", is_default: true, is_usable: true },
+          { id: "pd_bad", currency: "NGN", is_default: true, is_usable: false },
+        ],
+      }),
+    );
+    const provider = createBachsProvider({ secretKey: "sk_sandbox_key", fetch: fetchMock });
+    await expect(provider.getDefaultPayoutDestination("acct_dj", "NGN")).resolves.toBe("pd_new");
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ "X-Account-Id": "acct_dj" });
+
+    fetchMock.mockImplementation(async () => Response.json({ destinations: [] }));
+    await expect(provider.getDefaultPayoutDestination("acct_dj", "NGN")).resolves.toBeNull();
+  });
+
+  it("pays out to the bank as the payee, net of the fee", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => Response.json({ id: "pay_1", status: "pending", fee: "50.00" }));
+    const provider = createBachsProvider({ secretKey: "sk_sandbox_key", fetch: fetchMock });
+    await expect(
+      provider.payoutToBank({
+        accountId: "acct_dj",
+        destinationId: "pd_new",
+        amount: { amount: "4950.00", currency: "NGN" },
+        reference: ORDER_ID,
+        idempotencyKey: "payout_p1",
+      }),
+    ).resolves.toEqual({ payoutId: "pay_1", status: "processing", fee: "50.00" });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://sandbox-api.bachs.io/v1/payouts");
+    expect(init?.headers).toMatchObject({ "X-Account-Id": "acct_dj", "Idempotency-Key": "payout_p1" });
+    expect(JSON.parse(init?.body as string)).toEqual({ destination: "pd_new", amount: "4950.00", reference: ORDER_ID });
+  });
+
+  it("normalises payout.paid and payout.failed", () => {
+    const event = (type: string, data: object) => JSON.stringify({ id: "evt_p", type, organization_id: "acct_dj", data });
+    expect(parse(event("payout.paid", { withdrawal_id: "pay_1", reference: ORDER_ID, status: "completed" }))).toMatchObject({
+      kind: "payout_updated",
+      providerPayoutId: "pay_1",
+      payoutId: ORDER_ID,
+      status: "paid",
+      error: null,
+    });
+    expect(parse(event("payout.failed", { withdrawal_id: "pay_1", reference: null, failure_reason: "Account closed" }))).toMatchObject({
+      status: "failed",
+      payoutId: null,
+      error: "Account closed",
+    });
+  });
+});

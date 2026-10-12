@@ -60,6 +60,18 @@ export async function handlePaymentWebhook(
       return expireCheckout(event, deps);
     case "refund_updated":
       return applyRefundUpdate(event, deps);
+    case "payout_updated": {
+      const { data, error } = await deps.admin.rpc("record_payout_result", {
+        p_provider: deps.provider.name,
+        p_provider_payout_id: event.providerPayoutId,
+        // Nullable in SQL; generated types don't mark function args nullable.
+        p_reference: event.payoutId as string,
+        p_status: event.status,
+        p_error: event.error as string,
+      });
+      if (error) throw error;
+      return ok(data ? `payout_${event.status}` : "payout_unknown");
+    }
     case "payee_account_changed": {
       // Re-read the account rather than trusting event order (capabilities can
       // flip restricted <-> active more than once).

@@ -75,6 +75,9 @@ describe("onboarding and webhook sync (end to end, provider stubbed)", () => {
       },
       getPayeeAccount: async () => state.account,
       createOnboardingLink: async ({ accountId }) => ({ url: `https://sandbox-connect.bachs.io/${accountId}`, expiresAt: "x" }),
+      transferToPayee: () => Promise.reject(new Error("unused")),
+      getDefaultPayoutDestination: () => Promise.reject(new Error("unused")),
+      payoutToBank: () => Promise.reject(new Error("unused")),
       parseWebhook: (rawBody) => {
         const { id, type, account } = JSON.parse(rawBody);
         return { kind: "payee_account_changed", eventId: id, type, accountId: account, payload: {} };

@@ -60,7 +60,8 @@ Webhooks that can't be applied (unknown order, wrong amount, underpayment) are k
 ## Background jobs
 
 `pg_cron` runs every minute: song requests not played within the venue's timeout are rejected and refunded,
-unpaid orders expire after 45 minutes, and pending refunds are sent to Bachs by calling `/api/jobs/refunds`
-(new refunds wait a minute first). Locally the refund worker reaches your dev server at `host.docker.internal:3000`,
+unpaid orders expire after 45 minutes, and pending refunds and payouts are sent to Bachs by calling
+`/api/jobs/refunds` and `/api/jobs/payouts` (each waits a minute first). Nights still open auto-close at
+06:00 Lagos, and closed nights are settled at 12:00 Lagos. Locally the refund worker reaches your dev server at `host.docker.internal:3000`,
 so keep `npm run dev` running. Refunds of the demo orders fail at Bachs ("Charge not found") because their
 charges are made up: that's expected.

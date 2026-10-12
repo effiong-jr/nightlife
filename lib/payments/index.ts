@@ -15,6 +15,9 @@ export type {
   PayeeAccount,
   PaymentEvent,
   PaymentProvider,
+  PayoutToBankInput,
+  ProviderPayout,
+  TransferToPayeeInput,
   Refund,
   RefundStatus,
 } from "./types";
