@@ -16,7 +16,13 @@ const bachsSchema = z.object({
   BACHS_SECRET_KEY: z
     .string()
     .startsWith("sk_sandbox_", "BACHS_SECRET_KEY must be a sandbox key (sk_sandbox_...)"),
-  BACHS_WEBHOOK_SECRET: z.string().min(1),
+  // Optional until a webhook destination exists (`bachs listen` prints one locally).
+  // The webhook route refuses every request while it's unset.
+  // An empty value (as copied from .env.example) counts as unset.
+  BACHS_WEBHOOK_SECRET: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
 });
 
 const appSchema = z.object({

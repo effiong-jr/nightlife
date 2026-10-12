@@ -375,14 +375,14 @@ isOneToOne: false
                   ]
                 },"webhook_events": {
                   Row: {
-                    "id": string,"payload": NonNullable<Json>,"processed_at": string | null,"provider": string,"provider_event_id": string,"received_at": string,"type": string
+                    "error": string | null,"id": string,"payload": NonNullable<Json>,"processed_at": string | null,"provider": string,"provider_event_id": string,"received_at": string,"type": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "id"?: string,"payload": NonNullable<Json>,"processed_at"?: string | null,"provider": string,"provider_event_id": string,"received_at"?: string,"type": string
+                    "error"?: string | null,"id"?: string,"payload": NonNullable<Json>,"processed_at"?: string | null,"provider": string,"provider_event_id": string,"received_at"?: string,"type": string
                   }
                   Update: {
-                    "id"?: string,"payload"?: NonNullable<Json>,"processed_at"?: string | null,"provider"?: string,"provider_event_id"?: string,"received_at"?: string,"type"?: string
+                    "error"?: string | null,"id"?: string,"payload"?: NonNullable<Json>,"processed_at"?: string | null,"provider"?: string,"provider_event_id"?: string,"received_at"?: string,"type"?: string
                   }
                   Relationships: [
                     
@@ -415,6 +415,9 @@ isOneToOne: false
                            },
 "record_paid_order":
 { Args: { "p_amount": number,"p_checkout_id": string,"p_collection_id": string,"p_currency": string,"p_event_id": string,"p_event_type": string,"p_order_id": string,"p_payload": Json,"p_provider": string }; Returns: string
+                           },
+"record_webhook_failure":
+{ Args: { "p_error": string,"p_event_id": string,"p_event_type": string,"p_payload": Json,"p_provider": string }; Returns: undefined
                            },
 "shares_venue_with":
 { Args: { "p_profile_id": string }; Returns: boolean

@@ -1,6 +1,18 @@
 import "server-only";
+import { bachsEnv } from "@/lib/server/env";
+import { createBachsProvider } from "./bachs";
+import type { PaymentProvider } from "./types";
 
-// Payment provider boundary. All Bachs calls (and the only `@bachs/sdk` import)
-// live in this folder behind a small provider interface, so we can swap to
-// Paystack/Flutterwave later. Implemented in step 3.
-export {};
+// Payment provider boundary. All Bachs calls live in this folder behind
+// PaymentProvider, so we can swap to Paystack/Flutterwave later.
+
+export type { Checkout, CreateCheckoutInput, PaymentEvent, PaymentProvider } from "./types";
+export { PaymentProviderError, WebhookNotConfiguredError, WebhookSignatureError } from "./types";
+
+export function getPaymentProvider(): PaymentProvider {
+  const env = bachsEnv();
+  return createBachsProvider({
+    secretKey: env.BACHS_SECRET_KEY,
+    webhookSecret: env.BACHS_WEBHOOK_SECRET,
+  });
+}

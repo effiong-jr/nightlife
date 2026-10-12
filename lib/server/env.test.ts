@@ -17,7 +17,11 @@ describe("server env", () => {
   });
 
   it("reports every missing variable", () => {
-    expect(() => bachsEnv({})).toThrow(/BACHS_SECRET_KEY[\s\S]*BACHS_WEBHOOK_SECRET/);
+    expect(() => bachsEnv({})).toThrow(/BACHS_SECRET_KEY/);
+    expect(bachsEnv({ BACHS_SECRET_KEY: "sk_sandbox_x" }).BACHS_WEBHOOK_SECRET).toBeUndefined();
+    expect(
+      bachsEnv({ BACHS_SECRET_KEY: "sk_sandbox_x", BACHS_WEBHOOK_SECRET: "" }).BACHS_WEBHOOK_SECRET,
+    ).toBeUndefined();
     expect(() => supabaseServerEnv({})).toThrow(/SUPABASE_SECRET_KEY/);
   });
 

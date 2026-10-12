@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
+import { loadEnv } from "vite";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -29,6 +30,8 @@ export default defineConfig({
         test: {
           name: "db",
           include: ["tests/db/**/*.test.ts"],
+          // Supabase URL/keys for tests that go through the real API.
+          env: loadEnv("test", process.cwd(), ""),
           testTimeout: 30_000,
         },
       },

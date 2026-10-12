@@ -32,3 +32,18 @@ npm run dev                  # http://localhost:3000
 | `manager@test.local` | club manager |
 | `dj@test.local` | DJ on duty |
 | `mc@test.local` | MC on duty |
+
+## Payments locally (Bachs sandbox)
+
+Needs the Bachs CLI (`brew install bachsdev/bachs/bachs`, then `bachs login --sandbox`).
+
+```bash
+bachs listen --forward-to localhost:3000/api/webhooks/bachs
+# copy the printed whsec_... into .env.local as BACHS_WEBHOOK_SECRET, restart `npm run dev`
+bachs trigger collection.succeeded   # sends a signed test event
+```
+
+Bachs rejects `localhost` checkout return URLs, so to go through a real checkout set
+`NEXT_PUBLIC_APP_URL` to a public tunnel URL (e.g. `cloudflared tunnel --url http://localhost:3000`).
+Webhooks that can't be applied (unknown order, wrong amount, underpayment) are kept in
+`webhook_events` with an `error` for review; `bachs events replay <evt_id>` reprocesses one.
