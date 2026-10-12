@@ -21,6 +21,7 @@ npm run dev                  # http://localhost:3000
 | `npm run db:reset` | rebuild local DB from migrations + `supabase/seed.sql` |
 | `npm run db:types` | regenerate `lib/supabase/database.types.ts` |
 | `npm run db:stop` | stop local Supabase |
+| `npm run db:demo` | add a batch of paid demo orders to Test Lounge (song requests, shoutouts, sprays) |
 
 ## Local logins
 
