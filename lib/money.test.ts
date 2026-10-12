@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amountsEqual, formatNaira, fromMinorUnits, isAmount, toMinorUnits } from "./money";
+import { amountsEqual, formatNaira, fromMinorUnits, isAmount, nairaToAmount, toMinorUnits } from "./money";
 
 describe("money", () => {
   it("accepts only 2-decimal strings that fit numeric(14,2)", () => {
@@ -16,6 +16,12 @@ describe("money", () => {
     expect(fromMinorUnits(toMinorUnits("999999999999.99"))).toBe("999999999999.99");
     expect(amountsEqual("75000.00", "75000.00")).toBe(true);
     expect(amountsEqual("75000.00", "75000.01")).toBe(false);
+  });
+
+  it("converts whole-naira input to an amount", () => {
+    expect(nairaToAmount("5000")).toBe("5000.00");
+    expect(nairaToAmount(" 250 ")).toBe("250.00");
+    for (const bad of ["", "0", "05", "5.5", "-5", "5,000", "1e4"]) expect(nairaToAmount(bad)).toBeNull();
   });
 
   it("formats naira with thousands separators", () => {

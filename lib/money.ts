@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 // Money is a decimal string with exactly 2 places plus an ISO currency, matching
 // the Bachs API and Postgres numeric(14,2). Never a float. Arithmetic, if ever
 // needed, goes through minor units as bigint.
@@ -7,15 +5,7 @@ import { z } from "zod";
 export type Money = { amount: string; currency: string };
 
 // numeric(14,2): up to 12 integer digits.
-const AMOUNT_RE = /^(0|[1-9]\d{0,11})\.\d{2}$/;
-
-export const amountSchema = z
-  .string()
-  .regex(AMOUNT_RE, "Amount must be a decimal string with 2 places, e.g. \"2000.00\"");
-
-export const currencySchema = z.string().regex(/^[A-Z]{3}$/, "Currency must be an ISO 4217 code");
-
-export const moneySchema = z.object({ amount: amountSchema, currency: currencySchema });
+export const AMOUNT_RE = /^(0|[1-9]\d{0,11})\.\d{2}$/;
 
 export function isAmount(value: string): boolean {
   return AMOUNT_RE.test(value);
@@ -34,6 +24,12 @@ export function fromMinorUnits(minor: bigint): string {
 
 export function amountsEqual(a: string, b: string): boolean {
   return toMinorUnits(a) === toMinorUnits(b);
+}
+
+// Whole naira from a number input ("5000") to an amount string ("5000.00").
+export function nairaToAmount(naira: string): string | null {
+  const trimmed = naira.trim();
+  return /^[1-9]\d{0,11}$/.test(trimmed) ? `${trimmed}.00` : null;
 }
 
 // "₦2,000" / "₦2,000.50". Formats from the string, never via a float.

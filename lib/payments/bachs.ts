@@ -1,7 +1,8 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { amountSchema, amountsEqual, currencySchema, fromMinorUnits, toMinorUnits } from "@/lib/money";
+import { amountsEqual, fromMinorUnits, toMinorUnits } from "@/lib/money";
+import { amountSchema, currencySchema } from "@/lib/money-schema";
 import {
   type Checkout,
   type CreateCheckoutInput,

@@ -2,12 +2,16 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { amountSchema } from "@/lib/money";
+import { toMinorUnits } from "@/lib/money";
+import { amountSchema } from "@/lib/money-schema";
+import { checkText, FILTER_MESSAGES } from "@/lib/moderation/word-filter";
 import type { PaymentProvider } from "@/lib/payments";
 import type { Database } from "@/lib/supabase/database.types";
 import { numeric } from "@/lib/supabase/numeric";
 
 const CHECKOUT_EXPIRES_IN_MINUTES = 30;
+// Catches fat-finger amounts; well above any realistic single spray.
+export const MAX_ORDER_AMOUNT = "10000000.00";
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 
@@ -17,7 +21,11 @@ export const orderInputSchema = z
     type: z.enum(["spray", "screen_shoutout", "mc_shoutout", "song_request"]),
     nickname: text(30),
     amount: amountSchema,
-    tableLabel: text(20).optional(),
+    tableLabel: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9 -]{1,20}$/)
+      .optional(),
     message: text(140).optional(),
     songTitle: text(120).optional(),
     songArtist: text(120).optional(),
@@ -25,6 +33,16 @@ export const orderInputSchema = z
     showOnLeaderboard: z.boolean().default(true),
   })
   .superRefine((o, ctx) => {
+    if (toMinorUnits(o.amount) > toMinorUnits(MAX_ORDER_AMOUNT)) {
+      ctx.addIssue({ code: "custom", path: ["amount"], message: "That amount is too large" });
+    }
+    // Nicknames and messages can end up on the big screen or the mic.
+    for (const field of ["nickname", "message"] as const) {
+      const value = o[field];
+      if (!value) continue;
+      const check = checkText(value);
+      if (!check.ok) ctx.addIssue({ code: "custom", path: [field], message: FILTER_MESSAGES[check.reason] });
+    }
     if (o.type === "spray" && !o.sprayTarget) {
       ctx.addIssue({ code: "custom", path: ["sprayTarget"], message: "Choose who to spray" });
     }
