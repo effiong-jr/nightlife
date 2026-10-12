@@ -1,0 +1,2 @@
+-- Local dev seed data. Runs after migrations on `npm run db:reset`.
+-- Populated in step 2 (schema + RLS).
