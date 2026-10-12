@@ -78,6 +78,12 @@ DJs and MCs become staff at a venue in one of two ways; both end with an `active
 - Monitoring: Sentry; analytics: PostHog
 - Tests: Vitest for unit/integration (money logic first), Playwright later for key flows
 
+## Environments
+
+- **Local**: local Supabase (Docker), `npm run dev`, seed data, test phone numbers (code `123456`).
+- **Staging (test)**: Vercel project `nightlife` (https://nightlife-sand.vercel.app) + hosted Supabase project `pccxzessxwiltmseukwr` (EU). Still a **test environment**: Bachs **sandbox** keys only, seeded Test Lounge, test phone numbers instead of real SMS. Never put live keys or real customer data here.
+- **Production**: not set up yet (separate Supabase project and Vercel environment, `sk_live_` keys, Termii) — only when told to go live.
+
 ## Money rules (non-negotiable)
 
 1. **Webhooks are the only proof of payment.** Never mark an order paid from a client redirect or client event. Bachs `collection.succeeded` (verify the signature) → mark paid.
