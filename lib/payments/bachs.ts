@@ -47,6 +47,9 @@ const collectionSchema = z.object({
   amount: amountSchema,
   currency: currencySchema,
   expected_amount: amountSchema.optional(),
+  fee_bearer: z.string().nullish(),
+  processing_fee: amountSchema.nullish(),
+  processing_fee_currency: z.string().nullish(),
   overpaid_amount: amountSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).nullish(),
 });
@@ -105,8 +108,9 @@ export function createBachsProvider(config: BachsConfig): PaymentProvider {
         {
           pricing: { amount: input.amount.amount, currency: input.amount.currency },
           billing_currency: input.amount.currency,
-          // We absorb the processing fee so the customer pays exactly the order amount.
-          customer_bears_fee: false,
+          // The customer pays Bachs's processing fee on top, so we receive the
+          // full order amount and the ledger splits exactly that.
+          customer_bears_fee: true,
           reference: input.orderId,
           metadata: { ...input.metadata, order_id: input.orderId },
           success_url: input.successUrl,
@@ -205,24 +209,26 @@ function toPaymentEvent(envelope: z.infer<typeof envelopeSchema>, payload: unkno
       overpaidBy,
     });
 
-    // Without expected_amount we record what was charged; the database then
+    // Amounts toward the order, i.e. excluding a fee the customer paid on top.
+    // Without expected_amount we record what was paid; the database then
     // rejects it unless it equals the order amount.
-    const due = d.expected_amount;
+    const paid = withoutCustomerFee(d.amount, d);
+    const due = d.expected_amount && withoutCustomerFee(d.expected_amount, d);
     switch (d.status) {
       case "SUCCEEDED":
-        return succeeded(d.amount, null);
+        return succeeded(paid, null);
       // ACCEPTED: "an under- or overpayment was accepted as the final outcome".
       case "OVERPAID":
       case "ACCEPTED": {
-        if (!due || amountsEqual(d.amount, due)) return succeeded(d.amount, null);
-        const diff = toMinorUnits(d.amount) - toMinorUnits(due);
+        if (!due || amountsEqual(paid, due)) return succeeded(paid, null);
+        const diff = toMinorUnits(paid) - toMinorUnits(due);
         if (diff > 0n) return succeeded(due, d.overpaid_amount ?? fromMinorUnits(diff));
         return {
           kind: "payment_underpaid",
           ...base,
           orderId,
           checkoutId,
-          received: { amount: d.amount, currency: d.currency },
+          received: { amount: paid, currency: d.currency },
         };
       }
       default:
@@ -254,6 +260,20 @@ function toPaymentEvent(envelope: z.infer<typeof envelopeSchema>, payload: unkno
   }
 
   return { kind: "ignored", ...base };
+}
+
+// With fee_bearer "customer" the fee is added to the charge, so `amount` is the
+// order amount plus the fee. If the fee isn't known (yet), the amount is left
+// as-is and won't match the order: the payment is held for review rather than
+// recorded wrong.
+function withoutCustomerFee(
+  amount: string,
+  d: { fee_bearer?: string | null; processing_fee?: string | null; processing_fee_currency?: string | null; currency: string },
+): string {
+  if (d.fee_bearer !== "customer" || !d.processing_fee) return amount;
+  if (d.processing_fee_currency && d.processing_fee_currency !== d.currency) return amount;
+  const net = toMinorUnits(amount) - toMinorUnits(d.processing_fee);
+  return net > 0n ? fromMinorUnits(net) : amount;
 }
 
 const uuid = z.uuid();

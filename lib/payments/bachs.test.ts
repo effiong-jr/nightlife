@@ -122,6 +122,42 @@ describe("parseWebhook", () => {
     });
   });
 
+  it("excludes a processing fee the customer paid on top", () => {
+    expect(
+      parse(
+        collectionEvent({
+          amount: "2030.00",
+          fee_bearer: "customer",
+          processing_fee: "30.00",
+          processing_fee_currency: "NGN",
+        }),
+      ),
+    ).toMatchObject({ kind: "payment_succeeded", amount: { amount: "2000.00", currency: "NGN" } });
+  });
+
+  it("keeps the charged amount when the merchant bore the fee or the fee is unknown", () => {
+    const merchant = { amount: "2000.00", fee_bearer: "merchant", processing_fee: "30.00", processing_fee_currency: "NGN" };
+    expect(parse(collectionEvent(merchant))).toMatchObject({ amount: { amount: "2000.00" } });
+    // Unknown fee: the order won't match, so it lands in review instead of being misrecorded.
+    const unknownFee = { amount: "2030.00", fee_bearer: "customer", processing_fee: null };
+    expect(parse(collectionEvent(unknownFee))).toMatchObject({ amount: { amount: "2030.00" } });
+  });
+
+  it("applies the customer fee to overpayments too", () => {
+    expect(
+      parse(
+        collectionEvent({
+          status: "OVERPAID",
+          amount: "2530.00",
+          expected_amount: "2030.00",
+          overpaid_amount: "500.00",
+          fee_bearer: "customer",
+          processing_fee: "30.00",
+        }),
+      ),
+    ).toMatchObject({ kind: "payment_succeeded", amount: { amount: "2000.00" }, overpaidBy: "500.00" });
+  });
+
   it("falls back to the event ID when charge_id is null", () => {
     expect(parse(collectionEvent({ charge_id: null }))).toMatchObject({ collectionId: "event:evt_123" });
   });
@@ -193,7 +229,7 @@ describe("createCheckout", () => {
     expect(JSON.parse(init?.body as string)).toEqual({
       pricing: { amount: "2000.00", currency: "NGN" },
       billing_currency: "NGN",
-      customer_bears_fee: false,
+      customer_bears_fee: true,
       reference: ORDER_ID,
       metadata: { venue_id: "v1", order_id: ORDER_ID },
       success_url: input.successUrl,
